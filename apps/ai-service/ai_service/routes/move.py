@@ -14,7 +14,7 @@ async def get_move(req: MoveRequest) -> MoveResponse:
     white = sum(1 for row in req.board_state for c in row if c == 2)
     print(f"[MOVE REQ] move_number={req.move_number} color={req.color} B={black} W={white}", flush=True)
 
-    result = await get_ai_move_async(req.board_state, req.color, req.move_history or None)
+    result = await get_ai_move_async(req.board_state, req.color, req.move_history or None, req.ai_rank)
 
     return MoveResponse(
         row=result.row,

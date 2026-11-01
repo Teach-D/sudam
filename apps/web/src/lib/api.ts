@@ -55,6 +55,7 @@ export async function fetchAiMove(
   moveNumber: number,
   color: 'B' | 'W',
   moveHistory: GtpMove[] = [],
+  aiRank?: string,
 ): Promise<{ row: number; col: number; move_str: string; is_pass: boolean; score_lead: number; winrate: number; score_stdev: number }> {
   const res = await fetch(`${AI_SERVICE}/api/move`, {
     method: 'POST',
@@ -65,6 +66,7 @@ export async function fetchAiMove(
       move_number: moveNumber,
       color,
       move_history: moveHistory,
+      ai_rank: aiRank ?? null,
     }),
   })
   if (!res.ok) throw new Error(`AI move error: ${res.status}`)
@@ -125,14 +127,15 @@ export async function createGame(
   boardSize = 19,
   komi = 6.5,
   mode: GameMode = 'AI_VS_HUMAN',
+  aiRank?: string,
 ) {
   const res = await fetch(`${GAME_SERVER}/api/games`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...(await authHeader()) },
-    body: JSON.stringify({ boardSize, komi, mode }),
+    body: JSON.stringify({ boardSize, komi, mode, aiRank: aiRank ?? null }),
   })
   if (!res.ok) throw new Error(`Create game error: ${res.status}`)
-  return res.json() as Promise<{ id: string; status: string; mode: string; moveCount: number }>
+  return res.json() as Promise<{ id: string; status: string; mode: string; moveCount: number; aiRank: string | null }>
 }
 
 export async function logMove(

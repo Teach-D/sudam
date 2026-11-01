@@ -11,8 +11,8 @@ RUN curl -fsSL "http://deb.debian.org/debian/pool/main/o/openssl/libssl1.1_1.1.1
     dpkg -i /tmp/libssl1.1.deb && \
     rm /tmp/libssl1.1.deb
 
-# KataGo CPU-only (eigenavx2) 바이너리 설치
-RUN curl -fsSL "https://github.com/lightvector/KataGo/releases/download/v1.14.1/katago-v1.14.1-eigenavx2-linux-x64.zip" \
+# KataGo CPU-only (eigenavx2) 바이너리 설치 — v1.15.0+: Human SL 네트워크 지원
+RUN curl -fsSL "https://github.com/lightvector/KataGo/releases/download/v1.15.0/katago-v1.15.0-eigenavx2-linux-x64.zip" \
         -o /tmp/katago.zip && \
     unzip /tmp/katago.zip -d /tmp/katago_dir && \
     find /tmp/katago_dir -name "katago" -type f -exec install -m755 {} /usr/local/bin/katago \; && \

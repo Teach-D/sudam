@@ -221,7 +221,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
   setGameId: (id) => set({ gameId: id }),
   setMode: (mode) => set({ mode }),
-  setAiRank: (rank) => set({ aiRank: rank }),
+  setAiRank: (rank: string | null) => set({ aiRank: rank }),
   setCoachEnabled: (v) => set({ coachEnabled: v }),
   openQuestionPanel: (color) => set({ questionPanelOpenFor: color }),
   closeQuestionPanel: () => set({ questionPanelOpenFor: null }),
@@ -395,6 +395,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     set((s) => ({
       gameId: null,
       mode: s.mode,  // 모드는 로비에서 설정하므로 리셋 중 보존
+      aiRank: null,
       board: emptyBoard(),
       currentPlayer: 1,
       moveHistory: [],

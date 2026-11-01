@@ -47,6 +47,7 @@ async def get_ai_move_async(
     board_state: list[list[int]],
     color: str,
     move_history: list[tuple[str, str]] | None = None,
+    rank: str | None = None,
 ) -> AIMoveResult:
     """
     engine-pool을 통해 KataGo(또는 mock)에 착수를 요청하고 결과를 반환한다.
@@ -65,8 +66,25 @@ async def get_ai_move_async(
         initial_player=None if has_history else color,
         priority=Priority.AI_MOVE,
         max_visits=KATAGO_PLAY_VISITS,
+        human_rank=rank,
     )
-    resp = await pool.analyze(req)
+    try:
+        resp = await pool.analyze(req)
+    except RuntimeError as e:
+        if rank is not None:
+            # humanSL 프로필 인식 실패 → rank 없이 재시도
+            print(f"[AI_PLAYER] humanSL error ({e}), retrying without rank", flush=True)
+            req = AnalysisRequest(
+                board_size=Board.SIZE,
+                moves=moves,
+                board_grid=None if has_history else board_state,
+                initial_player=None if has_history else color,
+                priority=Priority.AI_MOVE,
+                max_visits=KATAGO_PLAY_VISITS,
+            )
+            resp = await pool.analyze(req)
+        else:
+            raise
 
     board = _restore_board(board_state)
     stone = Color.BLACK if color == "B" else Color.WHITE

@@ -41,9 +41,8 @@ export function useStompGame(gameId: string | null) {
   function handleEvent(type: string, payload: Record<string, unknown>) {
     switch (type) {
       case 'move.ai': {
-        const row = payload.row as number
-        const col = payload.col as number
-        store.placeAiStone(row, col)
+        // 프론트엔드가 AI 수를 직접 처리(handlePlace → placeAiStone)하므로
+        // WebSocket 이벤트로 다시 처리하면 moveHistory/moveCount가 중복된다.
         // KataGo 분석값이 없는 이벤트에서 0.5로 fallback 하면 승률바가 50/50으로 튄다.
         // 값이 실제로 담겨있을 때만 반영한다.
         if (payload.winrate != null && payload.scoreLead != null) {

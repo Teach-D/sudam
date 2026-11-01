@@ -5,7 +5,8 @@ import com.sudam.gameserver.game.domain.GameMode;
 public record CreateGameRequest(
         int boardSize,
         float komi,
-        GameMode mode
+        GameMode mode,
+        String aiRank   // nullable: "preAZ_10k" | "preAZ_5k" | "preAZ_1d"
 ) {
     public CreateGameRequest {
         if (boardSize != 9 && boardSize != 13 && boardSize != 19)

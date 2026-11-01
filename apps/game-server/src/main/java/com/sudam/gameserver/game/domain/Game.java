@@ -7,6 +7,8 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+// black_player_id / white_player_id are nullable to support guest play
+
 @Entity
 @Table(name = "games")
 public class Game {
@@ -31,6 +33,18 @@ public class Game {
 
     @Column(nullable = false)
     private int moveCount = 0;
+
+    @Column(name = "black_player_id")
+    private UUID blackPlayerId;
+
+    @Column(name = "white_player_id")
+    private UUID whitePlayerId;
+
+    @Column(length = 20)
+    private String aiRank;
+
+    @Column(columnDefinition = "TEXT")
+    private String sgfContent;
 
     @Column(nullable = false)
     private long blackTimeMs = 0;
@@ -126,6 +140,11 @@ public class Game {
         clockStartedAt = null;
     }
 
+    public void setBlackPlayerId(UUID id) { this.blackPlayerId = id; }
+    public void setWhitePlayerId(UUID id) { this.whitePlayerId = id; }
+    public void setSgfContent(String sgf) { this.sgfContent = sgf; }
+    public void setAiRank(String rank) { this.aiRank = rank; }
+
     public UUID getId() { return id; }
     public GameStatus getStatus() { return status; }
     public GameMode getMode() { return mode; }
@@ -136,5 +155,10 @@ public class Game {
     public long getWhiteTimeMs() { return whiteTimeMs; }
     public boolean isClockPaused() { return clockPaused; }
     public LocalDateTime getStartedAt() { return startedAt; }
+    public LocalDateTime getEndedAt() { return endedAt; }
     public LocalDateTime getCreatedAt() { return createdAt; }
+    public UUID getBlackPlayerId() { return blackPlayerId; }
+    public UUID getWhitePlayerId() { return whitePlayerId; }
+    public String getSgfContent() { return sgfContent; }
+    public String getAiRank() { return aiRank; }
 }

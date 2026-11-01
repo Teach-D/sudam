@@ -50,6 +50,7 @@ export default function GamePage() {
   const store = useGameStore()
   const { user } = useAuthStore()
   const [status, setStatus] = useState<'idle' | 'playing' | 'finished'>('idle')
+  const [rankSelecting, setRankSelecting] = useState(false)
   const [questionInput, setQuestionInput] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [hoveredCoords, setHoveredCoords] = useState<CoordMarker[]>([])
@@ -65,15 +66,15 @@ export default function GamePage() {
     }
   }, [store.gamePhase])
 
-  async function startGame(mode: GameMode) {
+  async function startGame(mode: GameMode, aiRank?: string) {
     store.setMode(mode)
     store.setCoachEnabled(mode === 'AI_VS_HUMAN')
     try {
-      const game = await createGame(19, 6.5, mode)
-      store.setGameId(game.id)
+      const game = await createGame(19, 6.5, mode, aiRank)
       store.resetGame()
       store.setGameId(game.id)
       store.setMode(mode)
+      if (aiRank) store.setAiRank(aiRank)
       komiRef.current = 6.5
       prevScoreRef.current = 0
       prevWinrateRef.current = 0.5
@@ -84,6 +85,7 @@ export default function GamePage() {
       store.resetGame()
       store.setGameId('local-' + Date.now())
       store.setMode(mode)
+      if (aiRank) store.setAiRank(aiRank)
       komiRef.current = 6.5
       prevScoreRef.current = 0
       prevWinrateRef.current = 0.5
@@ -136,18 +138,19 @@ export default function GamePage() {
 
   function handleNewGame() {
     setStatus('idle')
+    setRankSelecting(false)
     store.resetGame()
   }
 
   /** 색 공통: 수를 둔 뒤 KataGo 분석 + 자동 개입 체크 + 사범 발화 생성 */
   async function runPostMoveAnalysis(colorThatMoved: StoneColor) {
-    const { gameId, board, moveCount, interventionCount, lastInterventionMove, moveHistory } =
+    const { gameId, board, moveCount, interventionCount, lastInterventionMove, moveHistory, aiRank } =
       useGameStore.getState()
 
     // 다음 수 평가용으로 KataGo에 다음 색의 수를 조회 (실제 착수에는 사용 안 함; 분석값만 활용)
     const nextColor: 'B' | 'W' = colorThatMoved === 1 ? 'W' : 'B'
     const aiMove = await fetchAiMove(
-      gameId ?? 'local', board, moveCount + 1, nextColor, moveHistoryToGtp(moveHistory),
+      gameId ?? 'local', board, moveCount + 1, nextColor, moveHistoryToGtp(moveHistory), aiRank ?? undefined,
     )
 
     // KataGo 값은 nextColor 시점이므로 colorThatMoved 시점으로 환산
@@ -286,8 +289,9 @@ export default function GamePage() {
 
     store.setAiThinking(true)
     try {
+      const { aiRank } = useGameStore.getState()
       const aiMove = await fetchAiMove(
-        gameId ?? 'local', board, moveCount + 1, 'W', moveHistoryToGtp(moveHistory),
+        gameId ?? 'local', board, moveCount + 1, 'W', moveHistoryToGtp(moveHistory), aiRank ?? undefined,
       )
       if (!aiMove.is_pass) {
         store.placeAiStone(aiMove.row, aiMove.col)
@@ -549,10 +553,10 @@ export default function GamePage() {
         )}
       </div>
 
-      {status === 'idle' && (
+      {status === 'idle' && !rankSelecting && (
         <div className="flex flex-col gap-3 items-center mt-6">
           <button
-            onClick={() => startGame('AI_VS_HUMAN')}
+            onClick={() => setRankSelecting(true)}
             className="px-8 py-4 bg-amber-700 text-white rounded-xl text-lg font-semibold hover:bg-amber-800 transition shadow"
           >
             AI와 대국
@@ -567,6 +571,33 @@ export default function GamePage() {
             "둘이서 대국"은 한 디바이스에서 번갈아 두는 핫시트 모드입니다.<br/>
             AI 사범이 결정적 순간에만 조언하며, 사범 패널은 현재 턴 플레이어만 열람할 수 있습니다.
           </p>
+        </div>
+      )}
+
+      {status === 'idle' && rankSelecting && (
+        <div className="flex flex-col gap-4 items-center mt-6">
+          <p className="text-base font-semibold text-gray-700">AI 상대 급수를 선택하세요</p>
+          <div className="flex gap-3">
+            {([
+              { label: '10급', value: 'preaz_10k' },
+              { label: '5급',  value: 'preaz_5k' },
+              { label: '초단', value: 'preaz_1d' },
+            ] as const).map(({ label, value }) => (
+              <button
+                key={value}
+                onClick={() => { setRankSelecting(false); startGame('AI_VS_HUMAN', value) }}
+                className="px-6 py-3 bg-amber-700 text-white rounded-xl text-base font-semibold hover:bg-amber-800 transition shadow"
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={() => setRankSelecting(false)}
+            className="text-sm text-gray-400 hover:text-gray-600 transition"
+          >
+            뒤로
+          </button>
         </div>
       )}
 

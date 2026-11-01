@@ -26,6 +26,7 @@ services:
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-sudam}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-sudam_dev}
       AI_SERVICE_URL: http://ai-service:${AI_SERVICE_PORT:-8000}
+      JWT_SECRET: ${JWT_SECRET:-sudam-dev-secret-key-must-be-at-least-32-chars!!}
     depends_on:
       db:
         condition: service_healthy
@@ -45,14 +46,16 @@ services:
     environment:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
-      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.8-flash}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
       KATAGO_BINARY: katago
       KATAGO_MODEL: ${KATAGO_MODEL:-}
       KATAGO_HUMAN_MODEL: ${KATAGO_HUMAN_MODEL:-}
       KATAGO_CONFIG: /app/katago_analysis.cfg
       KATAGO_MOCK: ${KATAGO_MOCK:-true}
       KATAGO_MAX_VISITS: ${KATAGO_MAX_VISITS:-4}
-      KATAGO_QUESTION_VISITS: ${KATAGO_QUESTION_VISITS:-32}
+      KATAGO_PLAY_VISITS: ${KATAGO_PLAY_VISITS:-4}
+      KATAGO_QUESTION_VISITS: ${KATAGO_QUESTION_VISITS:-16}
+      KATAGO_USER_MOVE_VISITS: ${KATAGO_USER_MOVE_VISITS:-8}
       KATAGO_TIMEOUT: ${KATAGO_TIMEOUT:-60}
       DATABASE_URL: postgresql://${POSTGRES_USER:-sudam}:${POSTGRES_PASSWORD:-sudam_dev}@db:5432/${POSTGRES_DB:-sudam}
     volumes:

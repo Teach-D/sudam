@@ -37,6 +37,7 @@ def _cache_key(req: AnalysisRequest) -> tuple:
         req.max_visits,
         req.rules,
         req.komi,
+        req.human_rank,
     )
 
 # packages/engine-pool/engine_pool/pool.py → 4단계 위 = 프로젝트 루트
@@ -98,6 +99,7 @@ class EnginePool:
         pool_size: int = 2,
         binary: str | None = None,
         model: str | None = None,
+        human_model: str | None = None,
         config: str | None = None,
         timeout_seconds: float = float(os.getenv("KATAGO_TIMEOUT", "20")),
     ) -> None:
@@ -106,6 +108,10 @@ class EnginePool:
         self.model = _resolve_path(model or os.getenv("KATAGO_MODEL", ""))
         self.config = _resolve_path(config or os.getenv("KATAGO_CONFIG", "/app/katago_analysis.cfg"))
         self.timeout_seconds = timeout_seconds
+
+        # Human SL 모델 — 파일이 존재할 때만 사용. 없으면 일반 KataGo 동작.
+        _human_path = _resolve_path(human_model or os.getenv("KATAGO_HUMAN_MODEL", ""))
+        self.human_model: str | None = _human_path if (_human_path and Path(_human_path).exists()) else None
 
         # 모델 파일이 없으면 자동으로 mock 모드로 전환
         model_exists = bool(self.model) and Path(self.model).exists()
@@ -220,6 +226,9 @@ class EnginePool:
     async def _launch_katago(self) -> None:
         """KataGo 프로세스를 시작하고 'Started, ready' 메시지를 확인한 뒤 리턴한다."""
         cmd = [self.binary, "analysis", "-model", self.model, "-config", self.config]
+        if self.human_model:
+            cmd += ["-human-model", self.human_model]
+            print(f"[KATAGO] Human SL model loaded: {self.human_model}", flush=True)
         self._ready_event = asyncio.Event()
         self._katago_proc = await asyncio.create_subprocess_exec(
             *cmd,
@@ -257,6 +266,16 @@ class EnginePool:
             try:
                 raw = line.decode().strip()
                 data = json.loads(raw)
+                # KataGo는 경고를 {"id":"...","warning":"..."} JSON으로 내보낸다.
+                # warning 필드가 있으면 응답이 아니므로 건너뛴다.
+                if "warning" in data or "error" in data:
+                    print(f"[KATAGO WARN] {raw[:200]}", flush=True)
+                    if "error" in data:
+                        req_id = data.get("id", "")
+                        fut = self._pending.pop(req_id, None)
+                        if fut and not fut.done():
+                            fut.set_exception(RuntimeError(data["error"]))
+                    continue
                 root = data.get("rootInfo", {})
                 print(
                     f"[KATAGO RESP RAW] id={data.get('id','')[:8]} "
@@ -350,8 +369,10 @@ class EnginePool:
                 "moves": list(req.allow_moves),
                 "untilDepth": 1,
             }]
+        if req.human_rank:
+            query["overrideSettings"] = {"humanSLProfile": req.human_rank}
         payload = json.dumps(query) + "\n"
-        print(f"[KATAGO QUERY] id={req.request_id[:8]} stones={len(initial_stones)} moves={turn_moves} initialPlayer={query.get('initialPlayer','<none>')} visits={req.max_visits}", flush=True)
+        print(f"[KATAGO QUERY] id={req.request_id[:8]} stones={len(initial_stones)} moves={turn_moves} initialPlayer={query.get('initialPlayer','<none>')} visits={req.max_visits} humanRank={req.human_rank}", flush=True)
         self._katago_proc.stdin.write(payload.encode())
         await self._katago_proc.stdin.drain()
 

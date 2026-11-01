@@ -15,6 +15,8 @@ class MoveRequest(BaseModel):
     # [["B","D4"],["W","Q4"],...] — 수순 전체. 지정 시 KataGo에 수순으로 전달해
     # initialStones 왜곡(돌수-차례 불일치로 pass 추정)을 회피한다.
     move_history: list[tuple[str, str]] = Field(default_factory=list)
+    # Human SL 급수 프로필. None이면 일반 KataGo 강도로 둔다.
+    ai_rank: str | None = None  # "preAZ_10k" | "preAZ_5k" | "preAZ_1d"
 
 
 class MoveResponse(BaseModel):

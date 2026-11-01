@@ -15,7 +15,8 @@ public record GameResponse(
         long blackTimeMs,
         long whiteTimeMs,
         boolean clockPaused,
-        LocalDateTime createdAt
+        LocalDateTime createdAt,
+        String aiRank   // nullable
 ) {
     public static GameResponse from(Game g) {
         return new GameResponse(
@@ -28,7 +29,8 @@ public record GameResponse(
                 g.getBlackTimeMs(),
                 g.getWhiteTimeMs(),
                 g.isClockPaused(),
-                g.getCreatedAt()
+                g.getCreatedAt(),
+                g.getAiRank()
         );
     }
 }

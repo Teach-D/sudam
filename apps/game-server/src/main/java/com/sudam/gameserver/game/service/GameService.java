@@ -33,7 +33,13 @@ public class GameService {
     }
 
     public GameResponse createGame(CreateGameRequest req) {
+        return createGame(req, null);
+    }
+
+    public GameResponse createGame(CreateGameRequest req, UUID blackPlayerId) {
         Game game = Game.create(req.boardSize(), req.komi(), req.mode());
+        if (blackPlayerId != null) game.setBlackPlayerId(blackPlayerId);
+        if (req.aiRank() != null) game.setAiRank(req.aiRank());
         game.start();
         return GameResponse.from(games.save(game));
     }
@@ -130,14 +136,19 @@ public class GameService {
         return new TakebackResponse((int) activeCount, lastMove.getMoveNumber());
     }
 
-    /** S2-5: 계가 + 종료 */
+    /** S2-5: 계가 + 종료 (SGF 자동 저장) */
     public GameScoreResponse endGameWithScore(UUID gameId, GameScoreRequest req) {
         Game game = findGame(gameId);
         game.finish();
-        games.save(game);
+
+        List<Move> moveList = moves.findByGameIdOrderByMoveNumberAsc(gameId)
+                .stream().filter(m -> !m.isRetracted()).toList();
 
         GameScore score = GameScore.of(game, req.method(), req.blackScore(), req.whiteScore());
         scores.save(score);
+
+        game.setSgfContent(buildSgf(game, moveList, score.getResult()));
+        games.save(game);
 
         events.publish(gameId, "game.end", Map.of(
                 "result", score.getResult(),
@@ -145,6 +156,45 @@ public class GameService {
                 "whiteScore", score.getWhiteScore()
         ));
         return GameScoreResponse.from(score);
+    }
+
+    @Transactional(readOnly = true)
+    public List<GameListResponse> getUserGames(UUID userId) {
+        return games.findByPlayerId(userId).stream()
+                .map(g -> {
+                    GameScore score = scores.findTopByGameIdOrderByCreatedAtDesc(g.getId()).orElse(null);
+                    return GameListResponse.from(g, score);
+                })
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public String getSgf(UUID gameId) {
+        Game game = findGame(gameId);
+        if (game.getSgfContent() != null) return game.getSgfContent();
+        // 진행 중인 게임도 다운로드 가능
+        List<Move> moveList = moves.findByGameIdOrderByMoveNumberAsc(gameId)
+                .stream().filter(m -> !m.isRetracted()).toList();
+        return buildSgf(game, moveList, null);
+    }
+
+    private static String buildSgf(Game game, List<Move> moveList, String result) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("(;GM[1]FF[4]SZ[").append(game.getBoardSize()).append(']');
+        sb.append("KM[").append(game.getKomi()).append(']');
+        if (result != null) sb.append("RE[").append(result).append(']');
+        for (Move m : moveList) {
+            String color = m.getColor() == Color.BLACK ? "B" : "W";
+            if (m.getRow() == null) {
+                sb.append(';').append(color).append("[]");
+            } else {
+                char c = (char) ('a' + m.getCol());
+                char r = (char) ('a' + m.getRow());
+                sb.append(';').append(color).append('[').append(c).append(r).append(']');
+            }
+        }
+        sb.append(')');
+        return sb.toString();
     }
 
     private Game findGame(UUID id) {
