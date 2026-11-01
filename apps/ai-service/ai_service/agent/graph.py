@@ -330,6 +330,8 @@ async def run_coach_push(
     }
     result: CoachState = await _coach_graph.ainvoke(initial)
     claim = result["claim"]
+    cost = dict(result["cost"])
+    cost["model"] = _GEMINI_MODEL if _GEMINI_KEY else ""
     return {
         "utterance": claim.utterance if claim else "",
         "verified": claim.verified if claim else False,
@@ -342,7 +344,7 @@ async def run_coach_push(
             {"step": h.step, "label": h.label, "text": h.text}
             for h in result["hints"]
         ],
-        "cost": result["cost"],
+        "cost": cost,
     }
 
 
@@ -366,11 +368,13 @@ async def run_coach_question(
         "cost": {},
     }
     result: QuestionState = await _question_graph.ainvoke(initial)
+    cost = dict(result["cost"])
+    cost["model"] = _GEMINI_MODEL if _GEMINI_KEY else ""
     return {
         "question_type": result["question_type"],
         "answer": result["answer_text"],
         "variation": result["variation_moves"],
-        "cost": result["cost"],
+        "cost": cost,
     }
 
 

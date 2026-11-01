@@ -6,6 +6,13 @@ import type { CoachMessage, HintStep, VariationMove } from '@/store/gameStore'
 import { splitWithCoords, extractMarkersFromSegments } from '@/lib/coordHighlight'
 import type { CoordMarker } from '@/lib/coordHighlight'
 
+const REASON_CHIPS = [
+  { label: '설명이 틀림', value: 'wrong' },
+  { label: '이해가 안 됨', value: 'unclear' },
+  { label: '너무 김', value: 'too_long' },
+  { label: '부적절함(신고)', value: 'report' },
+] as const
+
 interface RichTextProps {
   text: string
   onCoordHover?: (markers: CoordMarker[] | null) => void
@@ -69,6 +76,9 @@ interface CoachPanelProps {
   pvpVisibility?: 'hidden' | 'open-for-black' | 'open-for-white' | 'review'
   onOpenPanel?: () => void       // "사범에게 묻기" — 현재 턴 플레이어가 패널을 연다
   onClosePanel?: () => void      // "확인" — 질의 세션 종료
+  onFeedback?: (messageId: string, rating: 'up' | 'down', reason?: string) => void
+  coachEnabled?: boolean
+  onToggleCoach?: (v: boolean) => void
 }
 
 export function CoachPanel({
@@ -93,11 +103,26 @@ export function CoachPanel({
   pvpVisibility,
   onOpenPanel,
   onClosePanel,
+  onFeedback,
+  coachEnabled = true,
+  onToggleCoach,
 }: CoachPanelProps) {
   const [showHints, setShowHints] = useState(false)
+  const [openReasonFor, setOpenReasonFor] = useState<string | null>(null)
 
-  // 가장 최근 코치 push 메시지
-  const lastPush = [...messages].reverse().find((m) => m.type === 'push')
+  function handleThumb(msg: CoachMessage, rating: 'up' | 'down') {
+    if (msg.rating === rating) return
+    onFeedback?.(msg.id, rating)
+    setOpenReasonFor(rating === 'down' ? msg.id : null)
+  }
+
+  function handleReason(msg: CoachMessage, reason: string) {
+    onFeedback?.(msg.id, 'down', reason)
+    setOpenReasonFor(null)
+  }
+
+  // 가장 최근 코치 push 또는 draft 메시지
+  const lastPush = [...messages].reverse().find((m) => m.type === 'push' || m.type === 'draft')
 
   // PvP: 패널이 닫혀있으면 "사범에게 묻기" 버튼만 노출. 상대 턴에 정보 유출 방지.
   if (pvpVisibility === 'hidden') {
@@ -131,6 +156,17 @@ export function CoachPanel({
 
   return (
     <div className="flex flex-col gap-3 w-72">
+      {onToggleCoach && (
+        <div className="flex items-center justify-between bg-white border border-gray-200 rounded px-3 py-1.5 text-xs shadow-sm">
+          <span className="text-gray-600">사범 알림</span>
+          <button
+            onClick={() => onToggleCoach(!coachEnabled)}
+            className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${coachEnabled ? 'bg-amber-500' : 'bg-gray-300'}`}
+          >
+            <span className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${coachEnabled ? 'translate-x-5' : 'translate-x-1'}`} />
+          </button>
+        </div>
+      )}
       {panelLabel && (
         <div className="flex items-center justify-between bg-amber-100 border border-amber-300 rounded px-2 py-1 text-xs">
           <span className="font-semibold text-amber-800">{panelLabel}</span>
@@ -173,7 +209,7 @@ export function CoachPanel({
                 onClick={onWhyAsk}
                 className="text-xs px-2 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded border border-blue-200 transition"
               >
-                잠깐, 이거 왜?
+                {lastPush?.type === 'draft' ? '왜 나쁜 수인가요?' : '잠깐, 이거 왜?'}
               </button>
             </div>
           )}
@@ -234,6 +270,52 @@ export function CoachPanel({
               }`}
             >
               <RichText text={m.text} onCoordHover={onCoordHover} />
+              {m.answerId != null && onFeedback && (
+                <div className="mt-1.5">
+                  <div className="flex gap-1 justify-end">
+                    <button
+                      onClick={() => handleThumb(m, 'up')}
+                      title="도움이 됐어요"
+                      className={`text-xs px-1.5 py-0.5 rounded transition ${
+                        m.rating === 'up'
+                          ? 'bg-green-100 text-green-700'
+                          : 'text-gray-400 hover:text-green-600 hover:bg-green-50'
+                      }`}
+                    >
+                      👍
+                    </button>
+                    <button
+                      onClick={() => handleThumb(m, 'down')}
+                      title="문제가 있어요"
+                      className={`text-xs px-1.5 py-0.5 rounded transition ${
+                        m.rating === 'down'
+                          ? 'bg-red-100 text-red-600'
+                          : 'text-gray-400 hover:text-red-500 hover:bg-red-50'
+                      }`}
+                    >
+                      👎
+                    </button>
+                  </div>
+                  {openReasonFor === m.id && (
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {REASON_CHIPS.map((chip) => (
+                        <button
+                          key={chip.value}
+                          onClick={() => handleReason(m, chip.value)}
+                          className="text-xs px-2 py-0.5 bg-gray-100 hover:bg-red-50 hover:text-red-700 text-gray-600 rounded-full border border-gray-200 transition"
+                        >
+                          {chip.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {m.feedbackReason && (
+                    <p className="text-xs text-gray-400 text-right mt-0.5">
+                      {REASON_CHIPS.find((c) => c.value === m.feedbackReason)?.label ?? m.feedbackReason}
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
           ))}
         </div>

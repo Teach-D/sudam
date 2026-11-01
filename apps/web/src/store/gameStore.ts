@@ -16,13 +16,26 @@ export interface MoveRecord {
   retracted?: boolean
 }
 
+export interface PendingCoachPayload {
+  game_id: string
+  board_state: number[][]
+  reason_type: string
+  score_drop: number
+  move_number: number
+  color_that_moved: 'B' | 'W'
+}
+
 export interface CoachMessage {
   id: string
   text: string
-  type: 'push' | 'reply'
+  type: 'push' | 'reply' | 'draft'
   createdAt: Date
   verified?: boolean
   verificationError?: string
+  answerId?: number
+  rating?: 'up' | 'down'
+  feedbackReason?: string
+  pendingCoachPayload?: PendingCoachPayload
 }
 
 export interface VariationMove {
@@ -55,6 +68,7 @@ interface GameStore {
   coachMessages: CoachMessage[]
   interventionCount: number
   lastInterventionMove: number
+  coachEnabled: boolean
   userQuestion: string
   // PvP: 질의자가 사범 패널을 연 상태. 다음 수가 놓이면 자동으로 닫혀서 상대 턴에 노출되지 않는다.
   questionPanelOpenFor: StoneColor | null
@@ -91,7 +105,9 @@ interface GameStore {
   setAiThinking: (v: boolean) => void
   placeAiStone: (row: number, col: number) => void
   addCoachMessage: (msg: CoachMessage) => void
+  updateCoachMessage: (id: string, patch: Partial<CoachMessage>) => void
   incrementIntervention: (moveNumber: number) => void
+  setCoachEnabled: (v: boolean) => void
   setUserQuestion: (q: string) => void
   resetGame: () => void
 
@@ -179,7 +195,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
   isAiThinking: false,
   coachMessages: [],
   interventionCount: 0,
-  lastInterventionMove: 0,
+  lastInterventionMove: -20,
+  coachEnabled: true,
   userQuestion: '',
   questionPanelOpenFor: null,
   gamePhase: 'PLAYING',
@@ -200,6 +217,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
   setGameId: (id) => set({ gameId: id }),
   setMode: (mode) => set({ mode }),
+  setCoachEnabled: (v) => set({ coachEnabled: v }),
   openQuestionPanel: (color) => set({ questionPanelOpenFor: color }),
   closeQuestionPanel: () => set({ questionPanelOpenFor: null }),
 
@@ -252,6 +270,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
   placeAiStone: (row, col) => {
     const { board, moveHistory, moveCount } = get()
+    // 이미 점유된 셀에 중복 착수 방지 (stale closure 경쟁 조건의 방어 레이어)
+    if (board[row][col] !== 0) return
     const newBoard = board.map((r) => [...r])
     newBoard[row][col] = 2
 
@@ -286,6 +306,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
   addCoachMessage: (msg) =>
     set((s) => ({ coachMessages: [...s.coachMessages, msg] })),
+
+  updateCoachMessage: (id, patch) =>
+    set((s) => ({
+      coachMessages: s.coachMessages.map((m) => (m.id === id ? { ...m, ...patch } : m)),
+    })),
 
   incrementIntervention: (moveNumber) =>
     set((s) => ({
@@ -372,7 +397,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
       isAiThinking: false,
       coachMessages: [],
       interventionCount: 0,
-      lastInterventionMove: 0,
+      lastInterventionMove: -20,
+      coachEnabled: s.coachEnabled,
       userQuestion: '',
       questionPanelOpenFor: null,
       gamePhase: 'PLAYING',

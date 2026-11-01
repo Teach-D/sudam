@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from typing import Literal
 
 from fastapi import APIRouter
@@ -43,6 +44,8 @@ class CoachPushResponse(BaseModel):
     variation: list[VariationMoveOut] = Field(default_factory=list)
     hints: list[HintStepOut] = Field(default_factory=list)
     cost: dict = Field(default_factory=dict)
+    llm_model: str = ""
+    latency_ms: int = 0
 
 
 class CoachQuestionRequest(BaseModel):
@@ -60,6 +63,8 @@ class CoachQuestionResponse(BaseModel):
     answer: str
     variation: list[dict] = Field(default_factory=list)
     cost: dict = Field(default_factory=dict)
+    llm_model: str = ""
+    latency_ms: int = 0
 
 
 # ── 엔드포인트 ──────────────────────────────────────────────────────────────────
@@ -67,6 +72,7 @@ class CoachQuestionResponse(BaseModel):
 @router.post("/coach/push", response_model=CoachPushResponse)
 async def coach_push(req: CoachPushRequest) -> CoachPushResponse:
     """F3 흐름: 개입 트리거 → 발화 + 힌트 생성."""
+    t0 = time.monotonic()
     result = await run_coach_push(
         board_state=req.board_state,
         reason_type=req.reason_type,
@@ -75,6 +81,7 @@ async def coach_push(req: CoachPushRequest) -> CoachPushResponse:
         color_that_moved=req.color_that_moved,
         best_move_korean=req.best_move_korean,
     )
+    latency_ms = int((time.monotonic() - t0) * 1000)
     tracker = get_tracker()
     cost = result.get("cost", {})
     tracker.record_llm(
@@ -83,12 +90,17 @@ async def coach_push(req: CoachPushRequest) -> CoachPushResponse:
         output_tokens=cost.get("utterance_output_tokens", 0) + cost.get("variation_output_tokens", 0),
     )
     tracker.record_intervention(req.game_id)
-    return CoachPushResponse(**result)
+    return CoachPushResponse(
+        **result,
+        llm_model=cost.get("model", ""),
+        latency_ms=latency_ms,
+    )
 
 
 @router.post("/coach/question", response_model=CoachQuestionResponse)
 async def coach_question(req: CoachQuestionRequest) -> CoachQuestionResponse:
     """F3-B 흐름: 사용자 질문 → 분류 + 답변."""
+    t0 = time.monotonic()
     result = await run_coach_question(
         board_state=req.board_state,
         move_number=req.move_number,
@@ -96,6 +108,7 @@ async def coach_question(req: CoachQuestionRequest) -> CoachQuestionResponse:
         color_that_moved=req.color_that_moved,
         move_history=req.move_history,
     )
+    latency_ms = int((time.monotonic() - t0) * 1000)
     tracker = get_tracker()
     cost = result.get("cost", {})
     tracker.record_llm(
@@ -104,7 +117,11 @@ async def coach_question(req: CoachQuestionRequest) -> CoachQuestionResponse:
         output_tokens=cost.get("answer_output_tokens", 0),
     )
     tracker.record_question(req.game_id)
-    return CoachQuestionResponse(**result)
+    return CoachQuestionResponse(
+        **result,
+        llm_model=cost.get("model", ""),
+        latency_ms=latency_ms,
+    )
 
 
 @router.get("/coach/cost/{game_id}")

@@ -39,6 +39,10 @@ class InterventionCheckRequest(BaseModel):
     score_stdev: float = 0.0
     interventions_so_far: int = 0
     last_intervention_move: int = 0
+    board_state: list[list[int]] | None = None
+    played_row: int | None = None
+    played_col: int | None = None
+    color_that_moved: Literal["B", "W"] = "B"
 
 
 class InterventionCheckResponse(BaseModel):

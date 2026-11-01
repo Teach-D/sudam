@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import Link from 'next/link'
+import { useAuthStore } from '@/store/authStore'
 import { GoBoard } from '@/components/GoBoard'
 import { BoardOverlay } from '@/components/BoardOverlay'
 import { TerritoryOverlay } from '@/components/TerritoryOverlay'
@@ -18,6 +20,7 @@ import {
   checkIntervention,
   fetchCoachPush,
   fetchCoachQuestion,
+  fetchDraft,
   moveHistoryToGtp,
   postUserQuestion,
   getGameMessages,
@@ -25,6 +28,8 @@ import {
   resumeGame,
   takebackMove,
   submitScore,
+  saveCoachAnswer,
+  submitFeedback,
 } from '@/lib/api'
 import { replayBoard } from '@/lib/boardReplay'
 import type { CoordMarker } from '@/lib/coordHighlight'
@@ -42,13 +47,13 @@ function rowColToKorean(row: number, col: number): string {
 
 export default function GamePage() {
   const store = useGameStore()
+  const { user } = useAuthStore()
   const [status, setStatus] = useState<'idle' | 'playing' | 'finished'>('idle')
   const [questionInput, setQuestionInput] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [hoveredCoords, setHoveredCoords] = useState<CoordMarker[]>([])
-  // PvP에서는 색마다 분석 기준점이 다르므로 색별로 보관
-  const prevScoreRef = useRef<Record<StoneColor, number>>({ 1: 0, 2: 0 })
-  const prevWinrateRef = useRef<Record<StoneColor, number>>({ 1: 0.5, 2: 0.5 })
+  const prevScoreRef = useRef<number>(0)
+  const prevWinrateRef = useRef<number>(0.5)
   const komiRef = useRef(6.5)
 
   useStompGame(store.gameId)
@@ -61,6 +66,7 @@ export default function GamePage() {
 
   async function startGame(mode: GameMode) {
     store.setMode(mode)
+    store.setCoachEnabled(mode === 'AI_VS_HUMAN')
     try {
       const game = await createGame(19, 6.5, mode)
       store.setGameId(game.id)
@@ -68,8 +74,8 @@ export default function GamePage() {
       store.setGameId(game.id)
       store.setMode(mode)
       komiRef.current = 6.5
-      prevScoreRef.current = { 1: 0, 2: 0 }
-      prevWinrateRef.current = { 1: 0.5, 2: 0.5 }
+      prevScoreRef.current = 0
+      prevWinrateRef.current = 0.5
       setStatus('playing')
       setError(null)
     } catch {
@@ -78,8 +84,8 @@ export default function GamePage() {
       store.setGameId('local-' + Date.now())
       store.setMode(mode)
       komiRef.current = 6.5
-      prevScoreRef.current = { 1: 0, 2: 0 }
-      prevWinrateRef.current = { 1: 0.5, 2: 0.5 }
+      prevScoreRef.current = 0
+      prevWinrateRef.current = 0.5
       setStatus('playing')
     }
   }
@@ -152,75 +158,68 @@ export default function GamePage() {
     const blackWinrate = colorThatMoved === 1 ? movedWinrate : aiMove.winrate
     store.setAnalysis(Math.max(0.05, Math.min(0.95, blackWinrate)), blackScoreLead)
 
-    const prevScore = prevScoreRef.current[colorThatMoved]
-    const prevWinrate = prevWinrateRef.current[colorThatMoved]
+    // ref는 항상 흑 시점으로 저장 → 착수자가 흑이면 그대로, 백이면 부호 반전
+    const prevBlackScore = prevScoreRef.current
+    const prevBlackWinrate = prevWinrateRef.current
+    const scoreBefore = colorThatMoved === 1 ? prevBlackScore : -prevBlackScore
+    const winrateBefore = colorThatMoved === 1 ? prevBlackWinrate : (1 - prevBlackWinrate)
 
+    const lastMove = moveHistory[moveHistory.length - 1]
     const ivCheck = await checkIntervention({
       game_id: gameId ?? 'local',
       move_number: moveCount,
-      score_before: prevScore,
+      score_before: scoreBefore,
       score_after: movedScoreLead,
-      winrate_before: prevWinrate,
+      winrate_before: winrateBefore,
       winrate_after: movedWinrate,
       score_stdev: aiMove.score_stdev,
       interventions_so_far: interventionCount,
       last_intervention_move: lastInterventionMove,
+      board_state: board,
+      played_row: lastMove?.row,
+      played_col: lastMove?.col,
+      color_that_moved: colorThatMoved === 1 ? 'B' : 'W',
     }).catch(() => ({ triggered: false, reason_type: null, score_drop: 0, score: 0 }))
 
-    prevScoreRef.current[colorThatMoved] = movedScoreLead
-    prevWinrateRef.current[colorThatMoved] = movedWinrate
+    prevScoreRef.current = blackScoreLead
+    prevWinrateRef.current = blackWinrate
 
-    if (ivCheck.triggered && ivCheck.reason_type) {
-      if (gameId && !gameId.startsWith('local-')) {
-        await pauseGameForCoach(
-          gameId,
-          ivCheck.reason_type,
-          ivCheck.score,
-          ivCheck.score_drop,
-        ).catch(() => {})
-      }
-      store.setGamePhase('COACH_PAUSE')
-
-      const coachResult = await fetchCoachPush({
+    const { coachEnabled } = useGameStore.getState()
+    if (ivCheck.triggered && ivCheck.reason_type && coachEnabled) {
+      const pendingPayload = {
         game_id: gameId ?? 'local',
         board_state: board,
         reason_type: ivCheck.reason_type,
         score_drop: ivCheck.score_drop,
         move_number: moveCount,
-        color_that_moved: colorThatMoved === 1 ? 'B' : 'W',
-      }).catch(() => null)
+        color_that_moved: (colorThatMoved === 1 ? 'B' : 'W') as 'B' | 'W',
+      }
 
-      if (coachResult) {
+      // draft 말풍선 즉시 표시 — LLM은 "왜?" 클릭 시 호출
+      const draftResult = await fetchDraft(pendingPayload).catch(() => null)
+      if (draftResult) {
         store.addCoachMessage({
           id: crypto.randomUUID(),
-          text: coachResult.utterance,
-          type: 'push',
+          text: draftResult.draft_text,
+          type: 'draft',
           createdAt: new Date(),
-          verified: coachResult.verified,
-          verificationError: coachResult.verification_error,
+          pendingCoachPayload: pendingPayload,
         })
         store.incrementIntervention(moveCount)
-
-        if (coachResult.variation.length > 0) store.setCoachVariation(coachResult.variation)
-        if (coachResult.hints.length > 0) store.setActiveHints(coachResult.hints)
 
         // PvP: 자동 개입은 "방금 둔 사람" 전용으로 패널을 연다
         if (useGameStore.getState().mode === 'HUMAN_VS_HUMAN_LOCAL') {
           store.openQuestionPanel(colorThatMoved)
         }
       }
-
-      if (gameId && !gameId.startsWith('local-')) {
-        await resumeGame(gameId).catch(() => {})
-      }
-      store.setGamePhase('PLAYING')
     }
 
     return { aiMove, blackWinrate, blackScoreLead }
   }
 
   async function handlePlace(row: number, col: number) {
-    const { mode, isAiThinking, currentPlayer, gamePhase } = store
+    // useGameStore.getState()로 최신 상태를 읽어 stale closure 방지
+    const { mode, isAiThinking, currentPlayer, gamePhase } = useGameStore.getState()
     if (isAiThinking) return
     if (gamePhase === 'COACH_PAUSE' || gamePhase === 'ANSWERING' || gamePhase === 'SCORING') return
 
@@ -267,7 +266,7 @@ export default function GamePage() {
   }
 
   async function handlePass() {
-    const { mode, isAiThinking, currentPlayer, gamePhase } = store
+    const { mode, isAiThinking, currentPlayer, gamePhase } = useGameStore.getState()
     if (isAiThinking) return
     if (gamePhase === 'COACH_PAUSE' || gamePhase === 'ANSWERING') return
     if (mode === 'AI_VS_HUMAN' && currentPlayer !== 1) return
@@ -328,14 +327,25 @@ export default function GamePage() {
     }).catch(() => null)
 
     if (coachReply) {
+      const msgId = crypto.randomUUID()
       store.addCoachMessage({
-        id: crypto.randomUUID(),
+        id: msgId,
         text: coachReply.answer,
         type: 'reply',
         createdAt: new Date(),
       })
       if (coachReply.variation.length > 0) {
         store.setCoachVariation(coachReply.variation)
+      }
+      if (gameId && !gameId.startsWith('local-')) {
+        saveCoachAnswer(gameId, {
+          kind: 'reply',
+          moveNumber: store.moveCount,
+          questionText: text,
+          answerText: coachReply.answer,
+          llmModel: coachReply.llm_model,
+          latencyMs: coachReply.latency_ms,
+        }).then(({ id }) => store.updateCoachMessage(msgId, { answerId: id })).catch(() => {})
       }
     } else {
       if (gameId && !gameId.startsWith('local-')) {
@@ -360,6 +370,61 @@ export default function GamePage() {
 
   async function handleWhyAsk() {
     const { gameId, board, moveCount, currentPlayer, coachMessages, moveHistory } = store
+
+    // draft 메시지가 있으면 LLM 분석을 실행하고 push로 업그레이드
+    const lastDraft = [...coachMessages].reverse().find((m) => m.type === 'draft' && m.pendingCoachPayload)
+    if (lastDraft?.pendingCoachPayload) {
+      store.setGamePhase('COACH_PAUSE')
+      if (gameId && !gameId.startsWith('local-')) {
+        await pauseGameForCoach(
+          gameId,
+          lastDraft.pendingCoachPayload.reason_type,
+          0,
+          lastDraft.pendingCoachPayload.score_drop,
+        ).catch(() => {})
+      }
+
+      const coachResult = await fetchCoachPush(lastDraft.pendingCoachPayload).catch(() => null)
+      if (coachResult) {
+        const msgId = crypto.randomUUID()
+        store.updateCoachMessage(lastDraft.id, {
+          type: 'push',
+          text: coachResult.utterance,
+          verified: coachResult.verified,
+          verificationError: coachResult.verification_error,
+          pendingCoachPayload: undefined,
+        })
+        if (gameId && !gameId.startsWith('local-')) {
+          saveCoachAnswer(gameId, {
+            kind: 'push',
+            moveNumber: lastDraft.pendingCoachPayload.move_number,
+            answerText: coachResult.utterance,
+            reasonType: lastDraft.pendingCoachPayload.reason_type,
+            verified: coachResult.verified,
+            analysisSnapshot: {
+              winrate: store.blackWinrate,
+              scoreLead: store.scoreLead,
+              scoreStdev: 0,
+              interventionScore: 0,
+              scoreDrop: lastDraft.pendingCoachPayload.score_drop,
+            },
+            llmModel: coachResult.llm_model,
+            latencyMs: coachResult.latency_ms,
+          }).then(({ id }) => store.updateCoachMessage(lastDraft.id, { answerId: id })).catch(() => {})
+        }
+        if (coachResult.variation.length > 0) store.setCoachVariation(coachResult.variation)
+        if (coachResult.hints.length > 0) store.setActiveHints(coachResult.hints)
+        void msgId
+      }
+
+      if (gameId && !gameId.startsWith('local-')) {
+        await resumeGame(gameId).catch(() => {})
+      }
+      store.setGamePhase('PLAYING')
+      return
+    }
+
+    // draft 없으면 기존 push 메시지 기반 "왜?" Q&A
     const lastPush = [...coachMessages].reverse().find((m) => m.type === 'push')
     if (!lastPush) return
 
@@ -383,6 +448,13 @@ export default function GamePage() {
         createdAt: new Date(),
       })
     }
+  }
+
+  function handleFeedback(messageId: string, rating: 'up' | 'down', reason?: string) {
+    const msg = store.coachMessages.find((m) => m.id === messageId)
+    if (!msg?.answerId) return
+    store.updateCoachMessage(messageId, { rating, feedbackReason: reason })
+    submitFeedback(msg.answerId, rating, reason).catch(() => {})
   }
 
   useEffect(() => {
@@ -433,7 +505,18 @@ export default function GamePage() {
 
   return (
     <main className="flex flex-col items-center p-4 gap-4 min-h-screen bg-stone-50">
-      <h1 className="text-2xl font-bold text-gray-800">수담</h1>
+      <div className="w-full max-w-4xl flex items-center justify-between">
+        <h1 className="text-2xl font-bold text-gray-800">수담</h1>
+        {user ? (
+          <Link href="/dashboard" className="text-sm text-amber-600 hover:underline font-medium">
+            {user.nickname || user.email} · 내 기록
+          </Link>
+        ) : (
+          <Link href="/login" className="text-sm text-gray-500 hover:text-gray-800 transition">
+            로그인
+          </Link>
+        )}
+      </div>
 
       {status === 'idle' && (
         <div className="flex flex-col gap-3 items-center mt-6">
@@ -627,6 +710,9 @@ export default function GamePage() {
               pvpVisibility={pvpVisibility}
               onOpenPanel={() => store.openQuestionPanel(store.currentPlayer)}
               onClosePanel={() => store.closeQuestionPanel()}
+              onFeedback={handleFeedback}
+              coachEnabled={store.coachEnabled}
+              onToggleCoach={store.setCoachEnabled}
             />
           </div>
         </div>
