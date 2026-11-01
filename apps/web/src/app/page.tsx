@@ -31,6 +31,7 @@ import {
   saveCoachAnswer,
   submitFeedback,
 } from '@/lib/api'
+import type { ConversationTurn } from '@/lib/api'
 import { replayBoard } from '@/lib/boardReplay'
 import type { CoordMarker } from '@/lib/coordHighlight'
 
@@ -310,12 +311,37 @@ export default function GamePage() {
     store.clearCoachVariation()
   }
 
+  function buildConversationHistory(
+    msgs: import('@/store/gameStore').CoachMessage[],
+    currentMoveNumber: number,
+  ): ConversationTurn[] {
+    // draft 제외, question/push/reply 만 포함. 최근 10턴(유저+AI 각 10개 = 20개) 으로 자름.
+    const relevant = msgs.filter((m) => m.type === 'question' || m.type === 'push' || m.type === 'reply')
+    return relevant.slice(-20).map((m) => ({
+      role: m.type === 'question' ? 'user' : 'assistant',
+      text: m.text,
+      move_number: m.moveNumber ?? currentMoveNumber,
+    }))
+  }
+
   async function sendQuestion(overrideText?: string) {
     const text = overrideText ?? questionInput
     if (!text.trim()) return
-    const { gameId, board, moveCount, currentPlayer } = store
+    const { gameId, board, moveCount, currentPlayer, coachMessages } = store
     // "방금 둔 색"은 수순 상 currentPlayer(다음 둘 색)의 반대. 모드 무관.
     const colorMoved = currentPlayer === 1 ? 'W' : 'B'
+
+    // 유저 질문을 먼저 스토어에 저장해 채팅 UI에 즉시 표시하고 이후 히스토리에도 포함
+    store.addCoachMessage({
+      id: crypto.randomUUID(),
+      text,
+      type: 'question',
+      createdAt: new Date(),
+      moveNumber: moveCount,
+    })
+    if (!overrideText) setQuestionInput('')
+
+    const conversationHistory = buildConversationHistory(coachMessages, moveCount)
 
     const coachReply = await fetchCoachQuestion({
       game_id: gameId ?? 'local',
@@ -324,6 +350,7 @@ export default function GamePage() {
       question_text: text,
       color_that_moved: colorMoved,
       move_history: moveHistoryToGtp(store.moveHistory),
+      conversation_history: conversationHistory,
     }).catch(() => null)
 
     if (coachReply) {
@@ -333,6 +360,7 @@ export default function GamePage() {
         text: coachReply.answer,
         type: 'reply',
         createdAt: new Date(),
+        moveNumber: moveCount,
       })
       if (coachReply.variation.length > 0) {
         store.setCoachVariation(coachReply.variation)
@@ -351,14 +379,7 @@ export default function GamePage() {
       if (gameId && !gameId.startsWith('local-')) {
         await postUserQuestion(gameId, text).catch(() => {})
       }
-      store.addCoachMessage({
-        id: crypto.randomUUID(),
-        text: `[질문] ${text}`,
-        type: 'reply',
-        createdAt: new Date(),
-      })
     }
-    if (!overrideText) setQuestionInput('')
   }
 
   async function handleAskPinned() {
@@ -431,6 +452,14 @@ export default function GamePage() {
     const colorMoved = currentPlayer === 1 ? 'W' : 'B'
     const questionText = `방금 수가 왜 나쁜가요? 사범이 말씀하신 내용: "${lastPush.text}"`
 
+    store.addCoachMessage({
+      id: crypto.randomUUID(),
+      text: questionText,
+      type: 'question',
+      createdAt: new Date(),
+      moveNumber: moveCount,
+    })
+
     const coachReply = await fetchCoachQuestion({
       game_id: gameId ?? 'local',
       board_state: board,
@@ -438,6 +467,7 @@ export default function GamePage() {
       question_text: questionText,
       color_that_moved: colorMoved,
       move_history: moveHistoryToGtp(moveHistory),
+      conversation_history: buildConversationHistory(coachMessages, moveCount),
     }).catch(() => null)
 
     if (coachReply) {
@@ -446,6 +476,7 @@ export default function GamePage() {
         text: coachReply.answer,
         type: 'reply',
         createdAt: new Date(),
+        moveNumber: moveCount,
       })
     }
   }

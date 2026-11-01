@@ -264,11 +264,16 @@ export function CoachPanel({
             <div
               key={m.id}
               className={`rounded p-2 text-sm ${
-                m.type === 'push'
+                m.type === 'question'
+                  ? 'bg-gray-100 border-l-4 border-gray-400 text-gray-700'
+                  : m.type === 'push'
                   ? 'bg-amber-50 border-l-4 border-amber-500'
                   : 'bg-blue-50 border-l-4 border-blue-400'
               }`}
             >
+              {m.type === 'question' && (
+                <span className="text-xs text-gray-400 block mb-0.5">나</span>
+              )}
               <RichText text={m.text} onCoordHover={onCoordHover} />
               {m.answerId != null && onFeedback && (
                 <div className="mt-1.5">

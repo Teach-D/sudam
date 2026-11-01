@@ -10,9 +10,12 @@ async function authHeader(): Promise<Record<string, string>> {
     let { accessToken } = auth
 
     // Decode JWT exp claim to check expiry proactively
+    // JWT uses base64url (- and _ instead of + and /); atob() only handles standard base64
     const parts = accessToken.split('.')
     if (parts.length === 3) {
-      const payload = JSON.parse(atob(parts[1]))
+      const b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/')
+      const padded = b64.padEnd(Math.ceil(b64.length / 4) * 4, '=')
+      const payload = JSON.parse(atob(padded))
       if (payload.exp * 1000 < Date.now()) {
         // Token expired — try to refresh silently
         const { refreshAccessToken, saveAuth } = await import('@/lib/auth')
@@ -249,6 +252,12 @@ export async function fetchCoachPush(payload: {
   return res.json()
 }
 
+export interface ConversationTurn {
+  role: 'user' | 'assistant'
+  text: string
+  move_number: number
+}
+
 export async function fetchCoachQuestion(payload: {
   game_id: string
   board_state: BoardState
@@ -256,6 +265,7 @@ export async function fetchCoachQuestion(payload: {
   question_text: string
   color_that_moved: 'B' | 'W'
   move_history?: GtpMove[]
+  conversation_history?: ConversationTurn[]
 }): Promise<{ question_type: string; answer: string; variation: VariationMoveOut[]; cost: Record<string, number>; llm_model: string; latency_ms: number }> {
   const res = await fetch(`${AI_SERVICE}/api/coach/question`, {
     method: 'POST',

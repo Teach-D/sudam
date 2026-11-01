@@ -20,7 +20,7 @@ from .hints import build_hints, HintStep
 from .tools import get_board_facts, play_variation
 
 _GEMINI_KEY = os.getenv("GEMINI_API_KEY", "")
-_GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.8-flash")
+_GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 _GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
 
 # 질문 응답용 KataGo 분석 깊이 — AI 착수보다 깊게 두어야 좌표·승률 품질 확보.
@@ -61,6 +61,7 @@ class QuestionState(TypedDict):
     question_text: str
     color_that_moved: str
     move_history: list[tuple[str, str]]  # [("B","D4"), ...] 수순 전체
+    conversation_history: list[dict]    # [{role, text, move_number}] 최대 10턴
 
     question_type: str             # "variation" | "reason" | "concept" | "other"
     answer_text: str
@@ -354,6 +355,7 @@ async def run_coach_question(
     question_text: str,
     color_that_moved: str = "B",
     move_history: list[tuple[str, str]] | None = None,
+    conversation_history: list[dict] | None = None,
 ) -> dict[str, Any]:
     """F3-B 흐름 실행 → answer + variation + cost 반환."""
     initial: QuestionState = {
@@ -362,6 +364,7 @@ async def run_coach_question(
         "question_text": question_text,
         "color_that_moved": color_that_moved,
         "move_history": list(move_history or []),
+        "conversation_history": list(conversation_history or []),
         "question_type": "",
         "answer_text": "",
         "variation_moves": [],
@@ -504,11 +507,13 @@ async def _llm_answer_variation(
         to_move = analysis.get("to_move")
         board_facts = _format_board_facts(state["board_state"], user_gtp, to_move)
 
+        conv_block = _format_conversation_history(state.get("conversation_history") or [])
         prompt = (
             f"당신은 노련한 바둑 사범입니다. {color_name}이 {state['move_number']}수를 두었고, "
             f"지금은 {next_color} 차례입니다.\n"
             f"{context}"
             f"{board_facts}\n"
+            f"{conv_block}"
             f"학생 질문: {state['question_text']}\n\n"
             + _COACH_RULES.format(next_color=next_color)
             + "\n\n"
@@ -517,6 +522,7 @@ async def _llm_answer_variation(
             "- 국소 전술 사실(따냄/단수/활로/자충)이 있으면 반드시 그걸 인용해 "
             "왜 그 수인지/왜 안 좋은지를 서술\n"
             "- PV가 있으면 상대 응수를 수순으로 명시\n"
+            "- 이전 대화가 있으면 맥락을 이어받아 답변 (예: '그럼 X 말고 Y는?' 같은 후속 질문 처리)\n"
             "- 3~4문장, 간결하게"
         )
         text, in_tok, out_tok = await _llm_chat_async(prompt, max_tokens=400)
@@ -535,10 +541,12 @@ async def _llm_answer_reason(
         to_move = analysis.get("to_move")
         board_facts = _format_board_facts(state["board_state"], user_gtp, to_move)
 
+        conv_block = _format_conversation_history(state.get("conversation_history") or [])
         prompt = (
             f"당신은 노련한 바둑 사범입니다. {color_name}이 {state['move_number']}수를 두었습니다.\n"
             f"{context}"
             f"{board_facts}\n"
+            f"{conv_block}"
             f"학생 질문: {state['question_text']}\n\n"
             + _COACH_RULES.format(next_color=next_color)
             + "\n\n"
@@ -546,6 +554,7 @@ async def _llm_answer_reason(
             "- 1순위 추천 수와 학생이 지목한 자리(또는 2순위)의 승률·집차 차이로 손실 규모 설명\n"
             "- '왜 손해인지'는 국소 전술 사실(따냄/단수/활로/자충)이나 PV(상대 응수)로 "
             "구체적으로 서술. 두 가지가 모두 있으면 둘 다 활용.\n"
+            "- 이전 대화가 있으면 맥락을 이어받아 답변 (예: '그럼 X 말고 Y는?' 같은 후속 질문 처리)\n"
             "- 3~4문장, 간결하게"
         )
         return await _llm_chat_async(prompt, max_tokens=400)
@@ -1028,6 +1037,22 @@ def _format_board_facts(
         if local:
             lines.append(_format_local_tactical(local, user_gtp))
     return ("\n".join(lines) + "\n") if lines else ""
+
+
+def _format_conversation_history(history: list[dict]) -> str:
+    """이전 대화 블록을 프롬프트용 문자열로 변환. 비어있으면 빈 문자열 반환."""
+    if not history:
+        return ""
+    lines = ["이전 대화:"]
+    cur_move: int | None = None
+    for turn in history:
+        move_num = turn.get("move_number", 0)
+        if move_num != cur_move:
+            lines.append(f"[{move_num}수 시점]")
+            cur_move = move_num
+        role = "학생" if turn.get("role") == "user" else "사범"
+        lines.append(f"{role}: {turn.get('text', '')}")
+    return "\n".join(lines) + "\n\n"
 
 
 def _data_only_variation_answer(analysis: dict, color_that_moved: str) -> str:

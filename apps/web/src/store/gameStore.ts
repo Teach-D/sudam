@@ -28,8 +28,9 @@ export interface PendingCoachPayload {
 export interface CoachMessage {
   id: string
   text: string
-  type: 'push' | 'reply' | 'draft'
+  type: 'push' | 'reply' | 'draft' | 'question'
   createdAt: Date
+  moveNumber?: number
   verified?: boolean
   verificationError?: string
   answerId?: number
@@ -60,6 +61,7 @@ export interface GameResult {
 interface GameStore {
   gameId: string | null
   mode: GameMode
+  aiRank: string | null
   board: BoardState
   currentPlayer: StoneColor
   moveHistory: MoveRecord[]
@@ -99,6 +101,7 @@ interface GameStore {
 
   setGameId: (id: string) => void
   setMode: (mode: GameMode) => void
+  setAiRank: (rank: string | null) => void
   openQuestionPanel: (color: StoneColor) => void
   closeQuestionPanel: () => void
   placeStone: (row: number, col: number) => boolean
@@ -188,6 +191,7 @@ function hasLiberty(board: BoardState, group: [number, number][]): boolean {
 export const useGameStore = create<GameStore>((set, get) => ({
   gameId: null,
   mode: 'AI_VS_HUMAN',
+  aiRank: null,
   board: emptyBoard(),
   currentPlayer: 1,
   moveHistory: [],
@@ -217,6 +221,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
   setGameId: (id) => set({ gameId: id }),
   setMode: (mode) => set({ mode }),
+  setAiRank: (rank) => set({ aiRank: rank }),
   setCoachEnabled: (v) => set({ coachEnabled: v }),
   openQuestionPanel: (color) => set({ questionPanelOpenFor: color }),
   closeQuestionPanel: () => set({ questionPanelOpenFor: null }),

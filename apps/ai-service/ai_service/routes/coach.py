@@ -48,6 +48,12 @@ class CoachPushResponse(BaseModel):
     latency_ms: int = 0
 
 
+class ConversationTurn(BaseModel):
+    role: Literal["user", "assistant"]
+    text: str
+    move_number: int
+
+
 class CoachQuestionRequest(BaseModel):
     game_id: str
     board_state: list[list[int]]
@@ -56,6 +62,8 @@ class CoachQuestionRequest(BaseModel):
     color_that_moved: Literal["B", "W"] = "B"
     # [["B","D4"],["W","Q4"],...] — 수순 전체.
     move_history: list[tuple[str, str]] = Field(default_factory=list)
+    # 같은 대국 안에서 앞서 나눈 대화 (최대 10턴). 지난 KataGo 분석은 포함하지 않음.
+    conversation_history: list[ConversationTurn] = Field(default_factory=list)
 
 
 class CoachQuestionResponse(BaseModel):
@@ -107,6 +115,7 @@ async def coach_question(req: CoachQuestionRequest) -> CoachQuestionResponse:
         question_text=req.question_text,
         color_that_moved=req.color_that_moved,
         move_history=req.move_history,
+        conversation_history=[t.model_dump() for t in req.conversation_history],
     )
     latency_ms = int((time.monotonic() - t0) * 1000)
     tracker = get_tracker()
