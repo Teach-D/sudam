@@ -1,0 +1,19 @@
+[project]
+name = "engine-pool"
+version = "0.1.0"
+description = "KataGo process pool with priority queue and mock fallback"
+requires-python = ">=3.12"
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "pytest-asyncio>=0.24", "ruff>=0.4"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+pythonpath = ["."]
+markers = ["engine: requires real KataGo binary"]

@@ -1,0 +1,55 @@
+{
+  "generated_at": "2026-10-04T11:08:35.639079",
+  "mode": "KATAGO_MOCK=true",
+  "note": "실제 KataGo 지연은 S3에서 측정. mock 기준 p95 < 1ms 확인됨.",
+  "results": {
+    "pool_size_1": {
+      "AI_MOVE": {
+        "n": 50,
+        "mean_ms": 0.01,
+        "p50_ms": 0.01,
+        "p95_ms": 0.02,
+        "p99_ms": 0.03
+      },
+      "ANALYSIS": {
+        "n": 50,
+        "mean_ms": 0.01,
+        "p50_ms": 0.01,
+        "p95_ms": 0.01,
+        "p99_ms": 0.01
+      }
+    },
+    "pool_size_2": {
+      "AI_MOVE": {
+        "n": 50,
+        "mean_ms": 0.01,
+        "p50_ms": 0.01,
+        "p95_ms": 0.01,
+        "p99_ms": 0.01
+      },
+      "ANALYSIS": {
+        "n": 50,
+        "mean_ms": 0.01,
+        "p50_ms": 0.01,
+        "p95_ms": 0.01,
+        "p99_ms": 0.02
+      }
+    },
+    "pool_size_4": {
+      "AI_MOVE": {
+        "n": 50,
+        "mean_ms": 0.01,
+        "p50_ms": 0.01,
+        "p95_ms": 0.01,
+        "p99_ms": 0.03
+      },
+      "ANALYSIS": {
+        "n": 50,
+        "mean_ms": 0.01,
+        "p50_ms": 0.01,
+        "p95_ms": 0.01,
+        "p99_ms": 0.01
+      }
+    }
+  }
+}

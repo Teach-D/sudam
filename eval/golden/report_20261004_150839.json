@@ -1,0 +1,130 @@
+{
+  "timestamp": "2026-10-04T15:08:39.377382",
+  "positions_count": 100,
+  "questions_count": 50,
+  "classifier": {
+    "total": 100,
+    "correct": 10,
+    "skipped": 0,
+    "accuracy": 0.1,
+    "errors": [
+      {
+        "id": "p001",
+        "expected": "life_death",
+        "predicted": null
+      },
+      {
+        "id": "p002",
+        "expected": "life_death",
+        "predicted": null
+      },
+      {
+        "id": "p003",
+        "expected": "cut_left",
+        "predicted": null
+      },
+      {
+        "id": "p004",
+        "expected": "missed_attack",
+        "predicted": null
+      },
+      {
+        "id": "p005",
+        "expected": "missed_big_point",
+        "predicted": null
+      },
+      {
+        "id": "p006",
+        "expected": "life_death",
+        "predicted": null
+      },
+      {
+        "id": "p007",
+        "expected": "endgame_sente",
+        "predicted": null
+      },
+      {
+        "id": "p008",
+        "expected": "life_death",
+        "predicted": null
+      },
+      {
+        "id": "p009",
+        "expected": "cut_left",
+        "predicted": null
+      },
+      {
+        "id": "p010",
+        "expected": "missed_big_point",
+        "predicted": null
+      }
+    ]
+  },
+  "question_classifier": {
+    "total": 50,
+    "correct": 35,
+    "accuracy": 0.7,
+    "errors": [
+      {
+        "id": "q005",
+        "text": "대마가 살 수 있나요?",
+        "expected": "reason",
+        "predicted": "other"
+      },
+      {
+        "id": "q008",
+        "text": "몇 집이나 손해인가요?",
+        "expected": "reason",
+        "predicted": "variation"
+      },
+      {
+        "id": "q009",
+        "text": "패는 어떻게 해야 하나요?",
+        "expected": "concept",
+        "predicted": "other"
+      },
+      {
+        "id": "q015",
+        "text": "대마가 살 수 있나요?",
+        "expected": "reason",
+        "predicted": "other"
+      },
+      {
+        "id": "q018",
+        "text": "몇 집이나 손해인가요?",
+        "expected": "reason",
+        "predicted": "variation"
+      },
+      {
+        "id": "q019",
+        "text": "패는 어떻게 해야 하나요?",
+        "expected": "concept",
+        "predicted": "other"
+      },
+      {
+        "id": "q025",
+        "text": "대마가 살 수 있나요?",
+        "expected": "reason",
+        "predicted": "other"
+      },
+      {
+        "id": "q028",
+        "text": "몇 집이나 손해인가요?",
+        "expected": "reason",
+        "predicted": "variation"
+      },
+      {
+        "id": "q029",
+        "text": "패는 어떻게 해야 하나요?",
+        "expected": "concept",
+        "predicted": "other"
+      },
+      {
+        "id": "q035",
+        "text": "대마가 살 수 있나요?",
+        "expected": "reason",
+        "predicted": "other"
+      }
+    ]
+  }
+}

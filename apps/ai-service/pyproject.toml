@@ -1,0 +1,40 @@
+[project]
+name = "ai-service"
+version = "0.1.0"
+description = "Sudam AI service: move generation, intervention detection, coach drafts"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "pydantic>=2.0",
+    "httpx>=0.27",
+    "python-dotenv>=1.0",
+    "langgraph>=0.2",
+    "openai>=1.0",
+    "analysis",
+    "go-core",
+    "engine-pool",
+    "verifier",
+]
+
+[tool.uv.sources]
+analysis = { path = "../../packages/analysis", editable = true }
+go-core = { path = "../../packages/go-core", editable = true }
+engine-pool = { path = "../../packages/engine-pool", editable = true }
+verifier = { path = "../../packages/verifier", editable = true }
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "pytest-asyncio>=0.24", "httpx>=0.27", "ruff>=0.4"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+pythonpath = [".", "../../packages/analysis", "../../packages/go-core", "../../packages/engine-pool", "../../packages/verifier"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"

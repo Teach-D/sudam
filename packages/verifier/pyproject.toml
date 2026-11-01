@@ -1,0 +1,23 @@
+[project]
+name = "verifier"
+version = "0.1.0"
+description = "Claim schema, sequence proof, re-generation fallback"
+requires-python = ">=3.12"
+dependencies = [
+    "go-core",
+    "pydantic>=2.0",
+]
+
+[tool.uv.sources]
+go-core = { path = "../go-core", editable = true }
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "ruff>=0.4"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = [".", "../go-core"]

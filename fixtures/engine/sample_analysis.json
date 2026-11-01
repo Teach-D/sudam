@@ -1,0 +1,59 @@
+{
+  "id": "sample-1",
+  "isDuringSearch": false,
+  "turnNumber": 0,
+  "rootInfo": {
+    "currentPlayer": "B",
+    "scoreLead": 0.5,
+    "scoreStdev": 8.2,
+    "visits": 100,
+    "winrate": 0.52
+  },
+  "moveInfos": [
+    {
+      "move": "D4",
+      "order": 0,
+      "visits": 100,
+      "winrate": 0.52,
+      "scoreLead": 0.5,
+      "scoreStdev": 8.0,
+      "pv": ["D4", "Q16", "D16", "Q4"]
+    },
+    {
+      "move": "Q4",
+      "order": 1,
+      "visits": 80,
+      "winrate": 0.51,
+      "scoreLead": 0.3,
+      "scoreStdev": 8.1,
+      "pv": ["Q4", "D16"]
+    },
+    {
+      "move": "D16",
+      "order": 2,
+      "visits": 60,
+      "winrate": 0.50,
+      "scoreLead": 0.1,
+      "scoreStdev": 8.3,
+      "pv": ["D16", "Q4"]
+    },
+    {
+      "move": "Q16",
+      "order": 3,
+      "visits": 50,
+      "winrate": 0.50,
+      "scoreLead": 0.0,
+      "scoreStdev": 8.2,
+      "pv": ["Q16", "D4"]
+    },
+    {
+      "move": "K10",
+      "order": 4,
+      "visits": 20,
+      "winrate": 0.49,
+      "scoreLead": -0.2,
+      "scoreStdev": 8.5,
+      "pv": ["K10"]
+    }
+  ]
+}
