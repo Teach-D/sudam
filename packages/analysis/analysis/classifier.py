@@ -27,8 +27,8 @@ def classify(
     if previous is None:
         return None
 
-    score_drop = abs(current.score_lead - previous.score_lead)
-    winrate_drop = abs(current.winrate - previous.winrate)
+    score_drop = previous.score_lead - current.score_lead
+    winrate_drop = previous.winrate - current.winrate
 
     if board_features is not None:
         return _classify_with_features(current, score_drop, winrate_drop, board_features)
@@ -90,6 +90,9 @@ def _classify_heuristic(
             if best_score - current.score_lead > 3.0:
                 return ReasonType.MISSED_ATTACK
         return ReasonType.CUT_LEFT
+
+    if 2.0 < score_drop <= 5.0 and current.turn_number <= 150:
+        return ReasonType.MISSED_BIG_POINT
 
     if score_drop > 2.0 and current.turn_number > 150:
         return ReasonType.ENDGAME_SENTE

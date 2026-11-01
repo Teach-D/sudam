@@ -5,7 +5,9 @@ import os
 from fastapi import APIRouter
 
 from analysis.analyzer import PositionFeatures
+from analysis.features import BoardFeatures, extract_board_features
 from analysis.intervention import check_intervention
+from go_core.board import Board, Color
 
 from ..schemas import (
     InterventionCheckRequest,
@@ -30,6 +32,17 @@ _DRAFT_TEMPLATES: dict[str, str] = {
 }
 
 
+def _board_from_state(board_state: list[list[int]]) -> Board:
+    board = Board()
+    for r, row in enumerate(board_state):
+        for c, v in enumerate(row):
+            if v == 1:
+                board._grid[r][c] = Color.BLACK
+            elif v == 2:
+                board._grid[r][c] = Color.WHITE
+    return board
+
+
 @router.post("/intervention/check", response_model=InterventionCheckResponse)
 async def check(req: InterventionCheckRequest) -> InterventionCheckResponse:
     current = PositionFeatures(
@@ -47,12 +60,30 @@ async def check(req: InterventionCheckRequest) -> InterventionCheckResponse:
         score_stdev=req.score_stdev,
     )
 
+    board_features: BoardFeatures | None = None
+    if req.board_state is not None and req.played_row is not None and req.played_col is not None:
+        try:
+            board = _board_from_state(req.board_state)
+            color = Color.BLACK if req.color_that_moved == "B" else Color.WHITE
+            board_features = extract_board_features(
+                board_after=board,
+                played_row=req.played_row,
+                played_col=req.played_col,
+                played_color=color,
+                best_moves=[],
+                score_lead_before=req.score_before,
+                score_lead_after=req.score_after,
+            )
+        except Exception:
+            pass
+
     decision = check_intervention(
         current=current,
         previous=previous,
         move_number=req.move_number,
         interventions_this_game=req.interventions_so_far,
         last_intervention_move=req.last_intervention_move,
+        board_features=board_features,
     )
 
     return InterventionCheckResponse(

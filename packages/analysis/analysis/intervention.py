@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 from .analyzer import PositionFeatures
 from .classifier import ReasonType, classify
+from .features import BoardFeatures
 
 # S1 초기값: 사전 실험 결과 반영 전 기본값
 SCORE_DROP_THRESHOLD = 3.0
@@ -32,6 +33,7 @@ def check_intervention(
     move_number: int,
     interventions_this_game: int,
     last_intervention_move: int,
+    board_features: BoardFeatures | None = None,
 ) -> InterventionDecision:
     """
     4-criterion score = SIZE(0.3) + CLARITY(0.3) + STABILITY(0.2) + EXPLAINABILITY(0.2)
@@ -46,8 +48,10 @@ def check_intervention(
     if previous is None:
         return _no
 
-    score_drop = abs(current.score_lead - previous.score_lead)
-    winrate_drop = abs(current.winrate - previous.winrate)
+    score_drop = previous.score_lead - current.score_lead
+    winrate_drop = previous.winrate - current.winrate
+    if score_drop <= 0 and winrate_drop <= 0:
+        return _no
 
     # SIZE: magnitude of mistake (normalised to 10-pt scale)
     size_score = min(score_drop / 10.0, 1.0)
@@ -59,7 +63,7 @@ def check_intervention(
     stability_score = 1.0 if current.score_stdev < 5.0 else max(0.0, 1.0 - current.score_stdev / 10.0)
 
     # EXPLAINABILITY: a reason type can be named
-    reason_type = classify(current, previous)
+    reason_type = classify(current, previous, board_features)
     explainability_score = 1.0 if reason_type is not None else 0.0
 
     total = (

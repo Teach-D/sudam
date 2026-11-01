@@ -1,6 +1,32 @@
 const AI_SERVICE = process.env.NEXT_PUBLIC_AI_SERVICE_URL ?? 'http://localhost:8000'
 const GAME_SERVER = process.env.NEXT_PUBLIC_GAME_SERVER_URL ?? 'http://localhost:8080'
 
+async function authHeader(): Promise<Record<string, string>> {
+  if (typeof window === 'undefined') return {}
+  try {
+    const raw = localStorage.getItem('auth')
+    if (!raw) return {}
+    const auth = JSON.parse(raw) as import('@/lib/auth').AuthUser
+    let { accessToken } = auth
+
+    // Decode JWT exp claim to check expiry proactively
+    const parts = accessToken.split('.')
+    if (parts.length === 3) {
+      const payload = JSON.parse(atob(parts[1]))
+      if (payload.exp * 1000 < Date.now()) {
+        // Token expired — try to refresh silently
+        const { refreshAccessToken, saveAuth } = await import('@/lib/auth')
+        const refreshed = await refreshAccessToken(auth.refreshToken)
+        saveAuth(refreshed)
+        accessToken = refreshed.accessToken
+      }
+    }
+    return accessToken ? { Authorization: `Bearer ${accessToken}` } : {}
+  } catch {
+    return {}
+  }
+}
+
 export type BoardState = number[][] // 0=empty, 1=black, 2=white
 export type GtpMove = [string, string] // ["B","D4"]
 
@@ -52,6 +78,10 @@ export async function checkIntervention(payload: {
   score_stdev?: number
   interventions_so_far: number
   last_intervention_move: number
+  board_state?: BoardState
+  played_row?: number
+  played_col?: number
+  color_that_moved?: 'B' | 'W'
 }) {
   const res = await fetch(`${AI_SERVICE}/api/intervention/check`, {
     method: 'POST',
@@ -95,7 +125,7 @@ export async function createGame(
 ) {
   const res = await fetch(`${GAME_SERVER}/api/games`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...(await authHeader()) },
     body: JSON.stringify({ boardSize, komi, mode }),
   })
   if (!res.ok) throw new Error(`Create game error: ${res.status}`)
@@ -197,6 +227,8 @@ export interface CoachPushResult {
   variation: VariationMoveOut[]
   hints: HintStepOut[]
   cost: Record<string, number>
+  llm_model: string
+  latency_ms: number
 }
 
 export async function fetchCoachPush(payload: {
@@ -224,7 +256,7 @@ export async function fetchCoachQuestion(payload: {
   question_text: string
   color_that_moved: 'B' | 'W'
   move_history?: GtpMove[]
-}): Promise<{ question_type: string; answer: string; variation: VariationMoveOut[]; cost: Record<string, number> }> {
+}): Promise<{ question_type: string; answer: string; variation: VariationMoveOut[]; cost: Record<string, number>; llm_model: string; latency_ms: number }> {
   const res = await fetch(`${AI_SERVICE}/api/coach/question`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -232,6 +264,73 @@ export async function fetchCoachQuestion(payload: {
   })
   if (!res.ok) throw new Error(`Coach question error: ${res.status}`)
   return res.json()
+}
+
+// ── Coach Answer 피드백 ───────────────────────────────────────────────────────
+
+export interface SaveCoachAnswerPayload {
+  kind: 'push' | 'reply'
+  moveNumber: number
+  questionText?: string
+  answerText: string
+  reasonType?: string | null
+  verified?: boolean
+  analysisSnapshot?: Record<string, unknown>
+  llmModel?: string
+  latencyMs?: number
+}
+
+export async function saveCoachAnswer(
+  gameId: string,
+  payload: SaveCoachAnswerPayload,
+): Promise<{ id: number }> {
+  const res = await fetch(`${GAME_SERVER}/api/games/${gameId}/coach-answers`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+  if (!res.ok) throw new Error(`saveCoachAnswer error: ${res.status}`)
+  return res.json()
+}
+
+export async function submitFeedback(
+  answerId: number,
+  rating: 'up' | 'down',
+  feedbackReason?: string,
+): Promise<void> {
+  const res = await fetch(`${GAME_SERVER}/api/coach-answers/${answerId}/feedback`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ rating, feedbackReason }),
+  })
+  if (!res.ok) throw new Error(`submitFeedback error: ${res.status}`)
+}
+
+// ── User Games ───────────────────────────────────────────────────────────────
+
+export interface GameSummary {
+  id: string
+  status: string
+  mode: string
+  boardSize: number
+  komi: number
+  moveCount: number
+  result: string | null
+  startedAt: string | null
+  endedAt: string | null
+  createdAt: string
+}
+
+export async function fetchMyGames(): Promise<GameSummary[]> {
+  const res = await fetch(`${GAME_SERVER}/api/games/my`, {
+    headers: await authHeader(),
+  })
+  if (!res.ok) throw new Error(`Fetch games error: ${res.status}`)
+  return res.json()
+}
+
+export function sgfDownloadUrl(gameId: string): string {
+  return `${GAME_SERVER}/api/games/${gameId}/sgf`
 }
 
 export async function submitScore(
