@@ -2,8 +2,12 @@ package com.sudam.gameserver.game.controller;
 
 import com.sudam.gameserver.game.dto.*;
 import com.sudam.gameserver.game.service.GameService;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -20,8 +24,16 @@ public class GameController {
     }
 
     @PostMapping
-    public ResponseEntity<GameResponse> create(@RequestBody CreateGameRequest req) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(service.createGame(req));
+    public ResponseEntity<GameResponse> create(
+            @RequestBody CreateGameRequest req,
+            @AuthenticationPrincipal UUID userId) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(service.createGame(req, userId));
+    }
+
+    @GetMapping("/my")
+    public ResponseEntity<List<GameListResponse>> myGames(@AuthenticationPrincipal UUID userId) {
+        if (userId == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        return ResponseEntity.ok(service.getUserGames(userId));
     }
 
     @GetMapping("/{id}")
@@ -74,5 +86,15 @@ public class GameController {
             @PathVariable UUID id,
             @RequestBody GameScoreRequest req) {
         return ResponseEntity.status(HttpStatus.CREATED).body(service.endGameWithScore(id, req));
+    }
+
+    @GetMapping("/{id}/sgf")
+    public ResponseEntity<byte[]> downloadSgf(@PathVariable UUID id) {
+        String sgf = service.getSgf(id);
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.parseMediaType("application/x-go-sgf"));
+        headers.setContentDisposition(
+                ContentDisposition.attachment().filename("game-" + id + ".sgf").build());
+        return ResponseEntity.ok().headers(headers).body(sgf.getBytes());
     }
 }

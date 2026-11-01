@@ -39,6 +39,8 @@ public class SecurityConfig {
                 // WebSocket 핸드셰이크
                 .requestMatchers("/ws/**").permitAll()
                 // 게임 생성/조회는 비로그인도 허용 (게스트 플레이 지원)
+                // /my는 {id} 패턴보다 먼저 선언해야 인증 요건이 적용된다
+                .requestMatchers(HttpMethod.GET, "/api/games/my").authenticated()
                 .requestMatchers(HttpMethod.POST, "/api/games").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/games/{id}").permitAll()
                 .requestMatchers("/api/games/{id}/moves",
