@@ -51,7 +51,7 @@ class AnalysisRequest:
     allow_moves: list[str] | None = None  # ["O7", ...] GTP
     # Human SL 급수 프로필 — AI 착수 요청에만 사용. 분석/사범 쿼리는 None으로 둔다.
     # KataGo는 humanSLProfile 없는 쿼리를 일반 강도로 응답한다.
-    human_rank: str | None = None  # "preaz_10k" | "preaz_5k" | "preaz_1d"
+    human_rank: str | None = None  # "preaz_10k" | "preaz_5k" | "preaz_1d" | "preaz_5d"
 
 
 @dataclass

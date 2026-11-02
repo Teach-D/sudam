@@ -54,6 +54,7 @@ export default function GamePage() {
   const [questionInput, setQuestionInput] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [hoveredCoords, setHoveredCoords] = useState<CoordMarker[]>([])
+  const [isCoachThinking, setIsCoachThinking] = useState(false)
   const prevScoreRef = useRef<number>(0)
   const prevWinrateRef = useRef<number>(0.5)
   const komiRef = useRef(6.5)
@@ -347,6 +348,7 @@ export default function GamePage() {
 
     const conversationHistory = buildConversationHistory(coachMessages, moveCount)
 
+    setIsCoachThinking(true)
     const coachReply = await fetchCoachQuestion({
       game_id: gameId ?? 'local',
       board_state: board,
@@ -355,7 +357,7 @@ export default function GamePage() {
       color_that_moved: colorMoved,
       move_history: moveHistoryToGtp(store.moveHistory),
       conversation_history: conversationHistory,
-    }).catch(() => null)
+    }).catch(() => null).finally(() => setIsCoachThinking(false))
 
     if (coachReply) {
       const msgId = crypto.randomUUID()
@@ -409,7 +411,9 @@ export default function GamePage() {
         ).catch(() => {})
       }
 
+      setIsCoachThinking(true)
       const coachResult = await fetchCoachPush(lastDraft.pendingCoachPayload).catch(() => null)
+      setIsCoachThinking(false)
       if (coachResult) {
         const msgId = crypto.randomUUID()
         store.updateCoachMessage(lastDraft.id, {
@@ -464,6 +468,7 @@ export default function GamePage() {
       moveNumber: moveCount,
     })
 
+    setIsCoachThinking(true)
     const coachReply = await fetchCoachQuestion({
       game_id: gameId ?? 'local',
       board_state: board,
@@ -473,6 +478,7 @@ export default function GamePage() {
       move_history: moveHistoryToGtp(moveHistory),
       conversation_history: buildConversationHistory(coachMessages, moveCount),
     }).catch(() => null)
+    setIsCoachThinking(false)
 
     if (coachReply) {
       store.addCoachMessage({
@@ -582,6 +588,7 @@ export default function GamePage() {
               { label: '10급', value: 'preaz_10k' },
               { label: '5급',  value: 'preaz_5k' },
               { label: '초단', value: 'preaz_1d' },
+              { label: '5단',  value: 'preaz_5d' },
             ] as const).map(({ label, value }) => (
               <button
                 key={value}
@@ -752,6 +759,7 @@ export default function GamePage() {
 
             <CoachPanel
               messages={store.coachMessages}
+              isCoachThinking={isCoachThinking}
               variation={store.coachVariation}
               variationStep={store.variationStep}
               hints={store.activeHints}
