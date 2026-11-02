@@ -245,6 +245,7 @@ export async function fetchCoachPush(payload: {
   move_number: number
   color_that_moved: 'B' | 'W'
   best_move_korean?: string
+  move_history?: GtpMove[]
 }): Promise<CoachPushResult> {
   const res = await fetch(`${AI_SERVICE}/api/coach/push`, {
     method: 'POST',

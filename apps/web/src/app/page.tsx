@@ -198,6 +198,7 @@ export default function GamePage() {
         score_drop: ivCheck.score_drop,
         move_number: moveCount,
         color_that_moved: (colorThatMoved === 1 ? 'B' : 'W') as 'B' | 'W',
+        move_history: moveHistoryToGtp(moveHistory),
       }
 
       // draft 말풍선 즉시 표시 — LLM은 "왜?" 클릭 시 호출
@@ -770,7 +771,7 @@ export default function GamePage() {
               onCloseVariation={store.clearCoachVariation}
               onRevealHint={store.revealNextHint}
               onQuestionChange={setQuestionInput}
-              onSendQuestion={sendQuestion}
+              onSendQuestion={() => sendQuestion()}
               onPresetQuestion={(text) => sendQuestion(text)}
               onWhyAsk={handleWhyAsk}
               onCoordHover={(m) => setHoveredCoords(m ?? [])}
