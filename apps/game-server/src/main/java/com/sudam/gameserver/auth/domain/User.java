@@ -27,6 +27,9 @@ public class User {
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
+    @Column
+    private LocalDateTime deletedAt;
+
     protected User() {}
 
     public static User create(String email, String passwordHash, String nickname) {
@@ -37,9 +40,16 @@ public class User {
         return u;
     }
 
+    public void softDelete() {
+        this.deletedAt = LocalDateTime.now();
+    }
+
+    public boolean isDeleted() { return deletedAt != null; }
+
     public UUID getId() { return id; }
     public String getEmail() { return email; }
     public String getPasswordHash() { return passwordHash; }
     public String getNickname() { return nickname; }
     public LocalDateTime getCreatedAt() { return createdAt; }
+    public LocalDateTime getDeletedAt() { return deletedAt; }
 }

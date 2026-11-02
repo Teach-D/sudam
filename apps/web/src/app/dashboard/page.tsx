@@ -48,6 +48,9 @@ export default function DashboardPage() {
         <Link href="/" className="text-xl font-bold text-gray-800">수담</Link>
         <div className="flex items-center gap-4">
           <span className="text-sm text-gray-600">{user.nickname || user.email}</span>
+          <Link href="/settings" className="text-sm text-gray-500 hover:text-gray-800 transition">
+            설정
+          </Link>
           <button
             onClick={handleLogout}
             className="text-sm text-gray-500 hover:text-gray-800 transition"

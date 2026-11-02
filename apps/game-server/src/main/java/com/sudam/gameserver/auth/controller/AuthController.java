@@ -2,6 +2,7 @@ package com.sudam.gameserver.auth.controller;
 
 import com.sudam.gameserver.auth.domain.User;
 import com.sudam.gameserver.auth.dto.AuthResponse;
+import com.sudam.gameserver.auth.dto.DeleteAccountRequest;
 import com.sudam.gameserver.auth.dto.LoginRequest;
 import com.sudam.gameserver.auth.dto.SignupRequest;
 import com.sudam.gameserver.auth.dto.TokenRefreshRequest;
@@ -45,6 +46,13 @@ public class AuthController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void logout(@AuthenticationPrincipal UUID userId) {
         authService.logout(userId);
+    }
+
+    @DeleteMapping("/account")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteAccount(@AuthenticationPrincipal UUID userId,
+                              @Valid @RequestBody DeleteAccountRequest req) {
+        authService.deleteAccount(userId, req.password());
     }
 
     @GetMapping("/me")

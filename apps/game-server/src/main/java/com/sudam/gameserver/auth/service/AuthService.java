@@ -55,10 +55,23 @@ public class AuthService {
     public AuthResponse login(LoginRequest req) {
         User user = users.findByEmail(req.email())
                 .orElseThrow(() -> new IllegalArgumentException("Invalid credentials"));
+        if (user.isDeleted()) {
+            throw new IllegalArgumentException("Invalid credentials");
+        }
         if (!passwordEncoder.matches(req.password(), user.getPasswordHash())) {
             throw new IllegalArgumentException("Invalid credentials");
         }
         return issueTokens(user);
+    }
+
+    public void deleteAccount(UUID userId, String password) {
+        User user = users.findById(userId)
+                .orElseThrow(() -> new NoSuchElementException("User not found: " + userId));
+        if (!passwordEncoder.matches(password, user.getPasswordHash())) {
+            throw new IllegalArgumentException("Invalid password");
+        }
+        refreshTokens.deleteAllByUserId(userId);
+        user.softDelete();
     }
 
     public AuthResponse refresh(String rawRefreshToken) {

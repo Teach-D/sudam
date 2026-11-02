@@ -56,6 +56,21 @@ export async function logoutApi(accessToken: string): Promise<void> {
   })
 }
 
+export async function deleteAccountApi(accessToken: string, password: string): Promise<void> {
+  const res = await fetch(`${GAME_SERVER}/api/auth/account`, {
+    method: 'DELETE',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify({ password }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.message ?? '탈퇴 처리 중 오류가 발생했습니다.')
+  }
+}
+
 export function saveAuth(user: AuthUser): void {
   localStorage.setItem('auth', JSON.stringify(user))
   // middleware에서 읽을 수 있도록 JS-accessible 쿠키에도 저장 (토큰 자체는 담지 않음)
