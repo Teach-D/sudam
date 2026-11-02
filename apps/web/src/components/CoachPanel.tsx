@@ -79,6 +79,7 @@ interface CoachPanelProps {
   onFeedback?: (messageId: string, rating: 'up' | 'down', reason?: string) => void
   coachEnabled?: boolean
   onToggleCoach?: (v: boolean) => void
+  isCoachThinking?: boolean
 }
 
 export function CoachPanel({
@@ -106,6 +107,7 @@ export function CoachPanel({
   onFeedback,
   coachEnabled = true,
   onToggleCoach,
+  isCoachThinking = false,
 }: CoachPanelProps) {
   const [showHints, setShowHints] = useState(false)
   const [openReasonFor, setOpenReasonFor] = useState<string | null>(null)
@@ -260,6 +262,19 @@ export function CoachPanel({
           {messages.length === 0 && (
             <p className="text-gray-400 text-xs">아직 메시지가 없습니다.</p>
           )}
+          {isCoachThinking && (
+            <div className="bg-amber-50 border-l-4 border-amber-400 rounded p-2 text-sm">
+              <span className="text-xs text-amber-600 block mb-0.5">사범</span>
+              <span className="text-amber-700 flex items-center gap-1">
+                생각 중
+                <span className="inline-flex gap-0.5">
+                  <span className="w-1 h-1 rounded-full bg-amber-500 animate-bounce [animation-delay:0ms]" />
+                  <span className="w-1 h-1 rounded-full bg-amber-500 animate-bounce [animation-delay:150ms]" />
+                  <span className="w-1 h-1 rounded-full bg-amber-500 animate-bounce [animation-delay:300ms]" />
+                </span>
+              </span>
+            </div>
+          )}
           {messages.map((m) => (
             <div
               key={m.id}
@@ -367,10 +382,10 @@ export function CoachPanel({
         />
         <button
           onClick={onSendQuestion}
-          disabled={!questionInput.trim()}
+          disabled={!questionInput.trim() || isCoachThinking}
           className="mt-2 w-full py-1.5 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 disabled:opacity-40 transition"
         >
-          전송
+          {isCoachThinking ? '답변 중...' : '전송'}
         </button>
       </div>
     </div>

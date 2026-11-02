@@ -25,9 +25,9 @@ _GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
 
 # 질문 응답용 KataGo 분석 깊이 — AI 착수보다 깊게 두어야 좌표·승률 품질 확보.
 # CPU(Eigen) 환경에선 32가 ~5-10초로 timeout 안전한 상한.
-_QUESTION_VISITS = int(os.getenv("KATAGO_QUESTION_VISITS", "32"))
+_QUESTION_VISITS = int(os.getenv("KATAGO_QUESTION_VISITS", "16"))
 # 학생 지목 좌표 2차 평가는 가볍게 — 1위 대비 수치 차이만 보여주면 되므로 상위 수준의 정확도 불필요.
-_USER_MOVE_VISITS = int(os.getenv("KATAGO_USER_MOVE_VISITS", "16"))
+_USER_MOVE_VISITS = int(os.getenv("KATAGO_USER_MOVE_VISITS", "8"))
 
 _GTP_COLS = list("ABCDEFGHJKLMNOPQRST")
 
@@ -1130,3 +1130,19 @@ def _data_only_reason_answer(analysis: dict, color_that_moved: str) -> str:
             "막는 방향으로 두어야 했습니다."
         )
     return msg
+
+
+async def warm_question_cache(
+    board_state: list[list[int]],
+    color_that_moved: str,
+    move_history: list[tuple[str, str]] | None = None,
+) -> None:
+    """coach/push 직후 백그라운드에서 호출해 질문 캐시를 선제 워밍.
+
+    사용자가 질문을 입력하는 몇 초 사이에 KataGo 분석을 미리 실행해 두므로
+    첫 질문도 캐시 히트(LLM만 대기)로 처리된다.
+    """
+    try:
+        await _fetch_position_analysis(board_state, color_that_moved, move_history or [])
+    except Exception:
+        pass

@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import asyncio
 import time
 from typing import Literal
 
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
-from ..agent import run_coach_push, run_coach_question
+from ..agent import run_coach_push, run_coach_question, warm_question_cache
 from ..cost_tracker import get_tracker
 
 router = APIRouter()
@@ -22,6 +23,7 @@ class CoachPushRequest(BaseModel):
     move_number: int
     color_that_moved: Literal["B", "W"]
     best_move_korean: str = ""
+    move_history: list[tuple[str, str]] = Field(default_factory=list)
 
 
 class HintStepOut(BaseModel):
@@ -98,6 +100,9 @@ async def coach_push(req: CoachPushRequest) -> CoachPushResponse:
         output_tokens=cost.get("utterance_output_tokens", 0) + cost.get("variation_output_tokens", 0),
     )
     tracker.record_intervention(req.game_id)
+    asyncio.create_task(
+        warm_question_cache(req.board_state, req.color_that_moved, req.move_history)
+    )
     return CoachPushResponse(
         **result,
         llm_model=cost.get("model", ""),

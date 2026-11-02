@@ -23,6 +23,7 @@ export interface PendingCoachPayload {
   score_drop: number
   move_number: number
   color_that_moved: 'B' | 'W'
+  move_history?: [string, string][]
 }
 
 export interface CoachMessage {
