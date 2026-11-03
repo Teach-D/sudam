@@ -33,7 +33,9 @@ import {
 } from '@/lib/api'
 import type { ConversationTurn } from '@/lib/api'
 import { replayBoard } from '@/lib/boardReplay'
+import { CIRCLED } from '@/lib/coordHighlight'
 import type { CoordMarker } from '@/lib/coordHighlight'
+import type { VariationMove } from '@/store/gameStore'
 
 const GTP_COLS_STR = 'ABCDEFGHJKLMNOPQRST'
 const KR_COLS_STR = '가나다라마바사아자차카타파하거너더러머'
@@ -53,7 +55,6 @@ export default function GamePage() {
   const [rankSelecting, setRankSelecting] = useState(false)
   const [questionInput, setQuestionInput] = useState('')
   const [error, setError] = useState<string | null>(null)
-  const [hoveredCoords, setHoveredCoords] = useState<CoordMarker[]>([])
   const [isCoachThinking, setIsCoachThinking] = useState(false)
   const prevScoreRef = useRef<number>(0)
   const prevWinrateRef = useRef<number>(0.5)
@@ -211,6 +212,11 @@ export default function GamePage() {
           createdAt: new Date(),
           pendingCoachPayload: pendingPayload,
         })
+        // 나쁜 수 위치에 X 마커 표시
+        const badRecord = useGameStore.getState().moveHistory.find(
+          (m) => m.moveNumber === pendingPayload.move_number,
+        )
+        if (badRecord) store.setBadMoveMarker({ row: badRecord.row, col: badRecord.col })
         store.incrementIntervention(moveCount)
 
         // PvP: 자동 개입은 "방금 둔 사람" 전용으로 패널을 연다
@@ -499,6 +505,18 @@ export default function GamePage() {
     submitFeedback(msg.answerId, rating, reason).catch(() => {})
   }
 
+  function handleSequenceClick(moves: CoordMarker[]) {
+    const { currentPlayer } = useGameStore.getState()
+    const firstColor: 'B' | 'W' = currentPlayer === 1 ? 'B' : 'W'
+    const variation: VariationMove[] = moves.map((m, i) => ({
+      row: m.row,
+      col: m.col,
+      color: i % 2 === 0 ? firstColor : (firstColor === 'B' ? 'W' : 'B'),
+      label: CIRCLED[i] ?? String(i + 1),
+    }))
+    store.setCoachVariation(variation)
+  }
+
   useEffect(() => {
     const { gameId } = store
     if (!gameId || gameId.startsWith('local-') || status !== 'playing') return
@@ -639,7 +657,7 @@ export default function GamePage() {
                 pinMode={isCoachActive}
                 onPin={(r, c) => store.setPinnedCell({ row: r, col: c })}
                 pinnedCell={store.pinnedCell}
-                coachCoordMarkers={hoveredCoords}
+
                 bgOverlay={
                   store.gamePhase === 'SCORING' && store.territoryMap ? (
                     <TerritoryOverlay
@@ -649,10 +667,12 @@ export default function GamePage() {
                   ) : undefined
                 }
                 overlay={
-                  store.coachVariation.length > 0 ? (
+                  store.coachVariation.length > 0 || store.badMoveMarker ? (
                     <BoardOverlay
                       moves={store.coachVariation}
                       visibleCount={store.variationStep}
+                      hidden={store.variationHidden}
+                      badMoves={store.badMoveMarker ? [store.badMoveMarker] : undefined}
                     />
                   ) : undefined
                 }
@@ -763,18 +783,20 @@ export default function GamePage() {
               isCoachThinking={isCoachThinking}
               variation={store.coachVariation}
               variationStep={store.variationStep}
+              variationHidden={store.variationHidden}
               hints={store.activeHints}
               currentHintStep={store.currentHintStep}
               questionInput={questionInput}
               isCoachActive={isCoachActive}
               onVariationStep={store.setVariationStep}
               onCloseVariation={store.clearCoachVariation}
+              onVariationHideToggle={() => store.setVariationHidden(!store.variationHidden)}
               onRevealHint={store.revealNextHint}
               onQuestionChange={setQuestionInput}
               onSendQuestion={() => sendQuestion()}
               onPresetQuestion={(text) => sendQuestion(text)}
               onWhyAsk={handleWhyAsk}
-              onCoordHover={(m) => setHoveredCoords(m ?? [])}
+              onSequenceClick={handleSequenceClick}
               pinnedCoordLabel={store.pinnedCell ? rowColToKorean(store.pinnedCell.row, store.pinnedCell.col) : null}
               onAskPinned={handleAskPinned}
               onClearPin={() => store.setPinnedCell(null)}

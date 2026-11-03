@@ -90,6 +90,8 @@ interface GameStore {
   // S3: 코치 에이전트
   coachVariation: VariationMove[]
   variationStep: number         // 현재 보여줄 수순 단계 (0 = 전체)
+  variationHidden: boolean      // 보드 오버레이 숨기기 (VariationPlayer는 유지)
+  badMoveMarker: { row: number; col: number } | null  // 나쁜 수 X 마커
   activeHints: HintStep[]
   currentHintStep: number       // 0 = 힌트 없음, 1~3 = 공개된 단계
 
@@ -126,6 +128,8 @@ interface GameStore {
   // S3 액션
   setCoachVariation: (moves: VariationMove[]) => void
   setVariationStep: (step: number) => void
+  setVariationHidden: (v: boolean) => void
+  setBadMoveMarker: (cell: { row: number; col: number } | null) => void
   setActiveHints: (hints: HintStep[]) => void
   revealNextHint: () => void
   clearCoachVariation: () => void
@@ -216,6 +220,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
   coachVariation: [],
   pinnedCell: null,
   variationStep: 0,
+  variationHidden: false,
+  badMoveMarker: null,
   activeHints: [],
   currentHintStep: 0,
   territoryMap: null,
@@ -335,14 +341,16 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
   setGameResult: (result) => set({ gameResult: result, gamePhase: 'FINISHED' }),
 
-  setCoachVariation: (moves) => set({ coachVariation: moves, variationStep: 0 }),
+  setCoachVariation: (moves) => set({ coachVariation: moves, variationStep: 0, variationHidden: false }),
   setVariationStep: (step) => set({ variationStep: step }),
+  setVariationHidden: (v) => set({ variationHidden: v }),
+  setBadMoveMarker: (cell) => set({ badMoveMarker: cell }),
   setActiveHints: (hints) => set({ activeHints: hints, currentHintStep: 0 }),
   revealNextHint: () =>
     set((s) => ({
       currentHintStep: Math.min(s.currentHintStep + 1, s.activeHints.length),
     })),
-  clearCoachVariation: () => set({ coachVariation: [], variationStep: 0 }),
+  clearCoachVariation: () => set({ coachVariation: [], variationStep: 0, variationHidden: false, badMoveMarker: null }),
 
   enterScoringMode: () => {
     const { board } = get()
@@ -417,6 +425,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
       gameResult: null,
       coachVariation: [],
       variationStep: 0,
+      variationHidden: false,
+      badMoveMarker: null,
       activeHints: [],
       currentHintStep: 0,
       territoryMap: null,

@@ -8,14 +8,52 @@ export interface CoordMarker {
 export type TextSegment =
   | { type: 'text'; content: string }
   | { type: 'coord'; content: string; marker: CoordMarker }
+  | { type: 'sequence'; content: string; moves: CoordMarker[] }
 
 const KR_COLS = '가나다라마바사아자차카타파하거너더러머'
-// 한국식 좌표: 열(가~머) + 행(1~19). 19부터 먼저 시도해 "가19"를 "가1"+"9"로 쪼개지 않게 한다.
 const COORD_RE = /[가나다라마바사아자차카타파하거너더러머](?:19|1[0-8]|[1-9])/g
-const CIRCLED = ['①', '②', '③', '④', '⑤', '⑥', '⑦', '⑧', '⑨', '⑩']
+export const CIRCLED = ['①', '②', '③', '④', '⑤', '⑥', '⑦', '⑧', '⑨', '⑩']
+
+// 인접한 좌표 세그먼트가 → 또는 -> 로 연결된 경우 sequence로 묶는다
+function mergeSequences(segments: TextSegment[]): TextSegment[] {
+  const result: TextSegment[] = []
+  let i = 0
+  while (i < segments.length) {
+    const seg = segments[i]
+    if (seg.type !== 'coord') {
+      result.push(seg)
+      i++
+      continue
+    }
+
+    const seqMoves: CoordMarker[] = [seg.marker]
+    let seqContent = seg.content
+    let j = i + 1
+
+    while (j + 1 < segments.length) {
+      const sep = segments[j]
+      const next = segments[j + 1]
+      if (sep.type !== 'text' || next.type !== 'coord') break
+      // 좌표 뒤에 붙는 "(좌상 화점)" 같은 설명 괄호도 구분자로 허용
+      if (!/^\s*(?:\([^)]*\))?\s*(?:→|->)\s*$/.test(sep.content)) break
+      seqMoves.push(next.marker)
+      seqContent += sep.content + next.content
+      j += 2
+    }
+
+    if (seqMoves.length >= 2) {
+      result.push({ type: 'sequence', content: seqContent, moves: seqMoves })
+      i = j
+    } else {
+      result.push(seg)
+      i++
+    }
+  }
+  return result
+}
 
 export function splitWithCoords(text: string): TextSegment[] {
-  const segments: TextSegment[] = []
+  const raw: TextSegment[] = []
   const markerMap = new Map<string, CoordMarker>()
   let count = 0
   let lastIndex = 0
@@ -27,7 +65,7 @@ export function splitWithCoords(text: string): TextSegment[] {
     const start = m.index
 
     if (start > lastIndex) {
-      segments.push({ type: 'text', content: text.slice(lastIndex, start) })
+      raw.push({ type: 'text', content: text.slice(lastIndex, start) })
     }
 
     if (!markerMap.has(coordText)) {
@@ -42,15 +80,15 @@ export function splitWithCoords(text: string): TextSegment[] {
       count++
     }
 
-    segments.push({ type: 'coord', content: coordText, marker: markerMap.get(coordText)! })
+    raw.push({ type: 'coord', content: coordText, marker: markerMap.get(coordText)! })
     lastIndex = start + coordText.length
   }
 
   if (lastIndex < text.length) {
-    segments.push({ type: 'text', content: text.slice(lastIndex) })
+    raw.push({ type: 'text', content: text.slice(lastIndex) })
   }
 
-  return segments
+  return mergeSequences(raw)
 }
 
 export function extractMarkersFromSegments(segments: TextSegment[]): CoordMarker[] {
@@ -60,6 +98,13 @@ export function extractMarkersFromSegments(segments: TextSegment[]): CoordMarker
     if (seg.type === 'coord' && !seen.has(seg.marker.coordText)) {
       seen.add(seg.marker.coordText)
       markers.push(seg.marker)
+    } else if (seg.type === 'sequence') {
+      for (const mv of seg.moves) {
+        if (!seen.has(mv.coordText)) {
+          seen.add(mv.coordText)
+          markers.push(mv)
+        }
+      }
     }
   }
   return markers

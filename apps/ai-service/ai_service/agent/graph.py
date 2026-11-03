@@ -30,6 +30,7 @@ _QUESTION_VISITS = int(os.getenv("KATAGO_QUESTION_VISITS", "16"))
 _USER_MOVE_VISITS = int(os.getenv("KATAGO_USER_MOVE_VISITS", "8"))
 
 _GTP_COLS = list("ABCDEFGHJKLMNOPQRST")
+_KR_COLS = '가나다라마바사아자차카타파하거너더러머'
 
 
 # ── 공유 상태 정의 ────────────────────────────────────────────────────────────
@@ -489,8 +490,8 @@ _COACH_RULES = (
     "3. 학생이 지목한 자리에 대한 국소 전술 블록이 있으면 **반드시 활용**하세요:\n"
     "   - 블록에 '따낸다', '단수로 몰 수 있다', '자충', '활로 N' 같은 사실이 "
     "적혀 있으면 그걸 그대로 서술해 왜 좋은/나쁜 수인지 설명하세요.\n"
-    "   - PV가 있으면 '이 자리에 두면 상대가 X로 받아 Y로 전개됩니다' 식으로 "
-    "구체적 수순을 인용하세요.\n"
+    "   - PV가 있으면 '이 자리에 두면 가4 → 나5 → 다6 순으로 전개됩니다' 처럼 "
+    "화살표(→) 수순을 **그대로** 유지하세요. 수순을 자연어로 바꾸거나 화살표를 제거하지 마세요.\n"
     "   - 승률·집차 숫자로 1위 추천 수 대비 손해/이득 규모를 명시하세요.\n"
     "4. 국소 전술 블록이 '둘 수 없는 자리'로 나오면 그 사실(불법 수)을 먼저 알려 "
     "주세요."
@@ -517,13 +518,13 @@ async def _llm_answer_variation(
             f"학생 질문: {state['question_text']}\n\n"
             + _COACH_RULES.format(next_color=next_color)
             + "\n\n"
-            "답변 포맷:\n"
-            "- 학생이 지목한 자리의 평가(또는 1~2개 상위 후보)와 1순위 추천 수의 차이를 수치로 설명\n"
-            "- 국소 전술 사실(따냄/단수/활로/자충)이 있으면 반드시 그걸 인용해 "
-            "왜 그 수인지/왜 안 좋은지를 서술\n"
-            "- PV가 있으면 상대 응수를 수순으로 명시\n"
-            "- 이전 대화가 있으면 맥락을 이어받아 답변 (예: '그럼 X 말고 Y는?' 같은 후속 질문 처리)\n"
-            "- 3~4문장, 간결하게"
+            "답변 포맷 (줄바꿈 블록 구조):\n"
+            "줄1: 현재 국면 상황 한 문장 (누가 우세, 누구 차례).\n"
+            "줄2~: 후보 수마다 번호를 매겨 한 줄씩. 형식: '1. [좌표] — 승률·집차 수치 + 핵심 이유'\n"
+            "   후보가 여럿이면 1., 2., 3. 으로 번호를 매겨 각 줄에 나열.\n"
+            "   국소 전술 사실(따냄/단수/활로/자충)이나 PV(상대 응수)는 해당 줄 이유에 포함.\n"
+            "이전 대화가 있으면 맥락을 이어받아 답변 (예: '그럼 X 말고 Y는?' 같은 후속 질문 처리).\n"
+            "각 줄은 \\n으로 구분. 수치는 각 줄 안에서 한 번만 언급."
         )
         text, in_tok, out_tok = await _llm_chat_async(prompt, max_tokens=400)
         return text, in_tok, out_tok
@@ -550,12 +551,13 @@ async def _llm_answer_reason(
             f"학생 질문: {state['question_text']}\n\n"
             + _COACH_RULES.format(next_color=next_color)
             + "\n\n"
-            "답변 포맷:\n"
-            "- 1순위 추천 수와 학생이 지목한 자리(또는 2순위)의 승률·집차 차이로 손실 규모 설명\n"
-            "- '왜 손해인지'는 국소 전술 사실(따냄/단수/활로/자충)이나 PV(상대 응수)로 "
-            "구체적으로 서술. 두 가지가 모두 있으면 둘 다 활용.\n"
-            "- 이전 대화가 있으면 맥락을 이어받아 답변 (예: '그럼 X 말고 Y는?' 같은 후속 질문 처리)\n"
-            "- 3~4문장, 간결하게"
+            "답변 포맷 (줄바꿈 블록 구조):\n"
+            "줄1: 현재 국면 상황 한 문장 (누가 우세, 누구 차례).\n"
+            "줄2~: 후보 수마다 번호를 매겨 한 줄씩. 형식: '1. [좌표] — 승률·집차 수치 + 핵심 이유'\n"
+            "   1순위 추천 수와 학생이 지목한 자리의 승률·집차 차이로 손실 규모 설명.\n"
+            "   국소 전술 사실(따냄/단수/활로/자충)이나 PV(상대 응수)는 해당 줄 이유에 포함.\n"
+            "이전 대화가 있으면 맥락을 이어받아 답변 (예: '그럼 X 말고 Y는?' 같은 후속 질문 처리).\n"
+            "각 줄은 \\n으로 구분. 수치는 각 줄 안에서 한 번만 언급."
         )
         return await _llm_chat_async(prompt, max_tokens=400)
     except Exception:
@@ -745,19 +747,31 @@ def _point_name(x: int, y: int) -> str:
     return ""
 
 
-def _gtp_to_label(gtp: str) -> str:
-    """GTP → '16-4' 또는 '16-4(우상 화점)' 식 숫자-숫자 + 지점명."""
+def _gtp_to_korean(gtp: str) -> str:
+    """GTP → 한국식 좌표 '가4' 형식 (지점명 없이)."""
     if not gtp or gtp.upper() in ("PASS", ""):
         return "패스"
     try:
         col_char = gtp[0].upper()
         row_num = int(gtp[1:])
         col = _GTP_COLS.index(col_char)
+        return _KR_COLS[col] + str(row_num)
+    except Exception:
+        return gtp
+
+
+def _gtp_to_label(gtp: str) -> str:
+    """GTP → 한국식 좌표 '가4' 또는 '가4(좌하 소목)' 형식."""
+    if not gtp or gtp.upper() in ("PASS", ""):
+        return "패스"
+    try:
+        col_char = gtp[0].upper()
+        row_num = int(gtp[1:])
+        col = _GTP_COLS.index(col_char)
+        kr = _KR_COLS[col] + str(row_num)
         x = col + 1
-        y = row_num
-        base = f"{x}-{y}"
-        name = _point_name(x, y)
-        return f"{base}({name})" if name else base
+        name = _point_name(x, row_num)
+        return f"{kr}({name})" if name else kr
     except Exception:
         return gtp
 
@@ -1021,7 +1035,7 @@ def _format_board_facts(
             if not gtp:
                 continue
             color_ko = "흑" if g["color"] == "B" else "백"
-            samples.append(f"{_gtp_to_label(gtp)}({color_ko} {g['size']}점)")
+            samples.append(f"{_gtp_to_korean(gtp)}({color_ko} {g['size']}점)")
         if samples:
             overflow = (
                 f" 외 {len(atari_groups) - len(samples)}개"

@@ -3,7 +3,7 @@
 import { useState, useMemo } from 'react'
 import { VariationPlayer } from './VariationPlayer'
 import type { CoachMessage, HintStep, VariationMove } from '@/store/gameStore'
-import { splitWithCoords, extractMarkersFromSegments } from '@/lib/coordHighlight'
+import { splitWithCoords } from '@/lib/coordHighlight'
 import type { CoordMarker } from '@/lib/coordHighlight'
 
 const REASON_CHIPS = [
@@ -15,31 +15,40 @@ const REASON_CHIPS = [
 
 interface RichTextProps {
   text: string
-  onCoordHover?: (markers: CoordMarker[] | null) => void
+  onSequenceClick?: (moves: CoordMarker[]) => void
 }
 
-function RichText({ text, onCoordHover }: RichTextProps) {
+function RichText({ text, onSequenceClick }: RichTextProps) {
   const segments = useMemo(() => splitWithCoords(text), [text])
-  const markers = useMemo(() => extractMarkersFromSegments(segments), [segments])
-
-  if (markers.length === 0) return <>{text}</>
 
   return (
-    <span onMouseLeave={() => onCoordHover?.(null)}>
-      {segments.map((seg, i) =>
-        seg.type === 'text' ? (
-          <span key={i}>{seg.content}</span>
-        ) : (
+    <>
+      {segments.map((seg, i) => {
+        if (seg.type === 'text') {
+          return <span key={i}>{seg.content}</span>
+        }
+        if (seg.type === 'sequence') {
+          return (
+            <button
+              key={i}
+              onClick={() => onSequenceClick?.(seg.moves)}
+              className="font-mono text-blue-700 bg-blue-50 rounded px-0.5 cursor-pointer hover:bg-blue-100 underline underline-offset-2 transition-colors"
+            >
+              {seg.content}
+            </button>
+          )
+        }
+        // type === 'coord'
+        return (
           <span
             key={i}
-            className="font-mono text-amber-700 bg-amber-50 rounded px-0.5 cursor-default hover:bg-amber-100 transition-colors"
-            onMouseEnter={() => onCoordHover?.(markers)}
+            className="font-mono text-amber-700 bg-amber-50 rounded px-0.5 cursor-default"
           >
-            {seg.content}{seg.marker.label}
+            {seg.content}
           </span>
-        ),
-      )}
-    </span>
+        )
+      })}
+    </>
   )
 }
 
@@ -55,27 +64,26 @@ interface CoachPanelProps {
   messages: CoachMessage[]
   variation: VariationMove[]
   variationStep: number
+  variationHidden: boolean
   hints: HintStep[]
   currentHintStep: number
   questionInput: string
-  isCoachActive: boolean         // COACH_PAUSE 또는 ANSWERING 상태
+  isCoachActive: boolean
   onVariationStep: (step: number) => void
   onCloseVariation: () => void
+  onVariationHideToggle: () => void
   onRevealHint: () => void
   onQuestionChange: (v: string) => void
   onSendQuestion: () => void
   onPresetQuestion: (text: string) => void
-  onWhyAsk: () => void           // "잠깐, 이거 왜?" 버튼
-  onCoordHover?: (markers: CoordMarker[] | null) => void  // 좌표 토큰 호버
-  pinnedCoordLabel?: string | null  // 핀된 교차점 한국식 좌표 (e.g. "라4")
-  onAskPinned?: () => void          // "여기에 두면?" 질문 전송
-  onClearPin?: () => void           // 핀 해제
-  // PvP(핫시트) 전용. null이면 패널 전체가 가려진다(상대 턴 보호).
-  // 'open-for-black' / 'open-for-white' 는 각 색의 플레이어가 질의 세션을 연 상태.
-  // AI 모드에서는 undefined로 두면 기존 UX 그대로 동작한다.
+  onWhyAsk: () => void
+  onSequenceClick?: (moves: CoordMarker[]) => void
+  pinnedCoordLabel?: string | null
+  onAskPinned?: () => void
+  onClearPin?: () => void
   pvpVisibility?: 'hidden' | 'open-for-black' | 'open-for-white' | 'review'
-  onOpenPanel?: () => void       // "사범에게 묻기" — 현재 턴 플레이어가 패널을 연다
-  onClosePanel?: () => void      // "확인" — 질의 세션 종료
+  onOpenPanel?: () => void
+  onClosePanel?: () => void
   onFeedback?: (messageId: string, rating: 'up' | 'down', reason?: string) => void
   coachEnabled?: boolean
   onToggleCoach?: (v: boolean) => void
@@ -86,18 +94,20 @@ export function CoachPanel({
   messages,
   variation,
   variationStep,
+  variationHidden,
   hints,
   currentHintStep,
   questionInput,
   isCoachActive,
   onVariationStep,
   onCloseVariation,
+  onVariationHideToggle,
   onRevealHint,
   onQuestionChange,
   onSendQuestion,
   onPresetQuestion,
   onWhyAsk,
-  onCoordHover,
+  onSequenceClick,
   pinnedCoordLabel,
   onAskPinned,
   onClearPin,
@@ -123,10 +133,8 @@ export function CoachPanel({
     setOpenReasonFor(null)
   }
 
-  // 가장 최근 코치 push 또는 draft 메시지
   const lastPush = [...messages].reverse().find((m) => m.type === 'push' || m.type === 'draft')
 
-  // PvP: 패널이 닫혀있으면 "사범에게 묻기" 버튼만 노출. 상대 턴에 정보 유출 방지.
   if (pvpVisibility === 'hidden') {
     return (
       <div className="flex flex-col gap-3 w-72">
@@ -186,7 +194,6 @@ export function CoachPanel({
       {/* 사범 말풍선 */}
       {lastPush && (
         <div className="relative bg-amber-50 border border-amber-300 rounded-xl p-3 shadow-sm">
-          {/* 검증 뱃지 */}
           <div className="absolute top-2 right-2">
             {lastPush.verified === true ? (
               <span className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full">✓ 검증됨</span>
@@ -194,11 +201,38 @@ export function CoachPanel({
               <span className="text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full">템플릿</span>
             ) : null}
           </div>
-          <p className="text-sm text-amber-900 leading-relaxed pr-16">
-            <RichText text={lastPush.text} onCoordHover={onCoordHover} />
-          </p>
+          <div className="text-sm text-amber-900 leading-relaxed pr-16 space-y-1.5">
+            {lastPush.text
+              .replace(/(?<=[.!?])\s+([1-9]\. )/g, '\n$1')
+              .split('\n').filter(Boolean).map((line, i) => {
+              const match = line.match(/^(\d+)\.\s*(.*)$/)
+              if (match) {
+                const [, num, content] = match
+                return (
+                  <div key={i} className="flex items-start gap-2 bg-white/70 rounded-lg px-2 py-1.5">
+                    <span className="flex-shrink-0 w-5 h-5 rounded-full bg-amber-500 text-white text-xs font-bold flex items-center justify-center mt-0.5">
+                      {num}
+                    </span>
+                    <p className="flex-1 min-w-0">
+                      <RichText
+                        text={content.replace(/\*\*/g, '')}
+                        onSequenceClick={onSequenceClick}
+                      />
+                    </p>
+                  </div>
+                )
+              }
+              return (
+                <p key={i}>
+                  <RichText
+                    text={line.replace(/\*\*/g, '')}
+                    onSequenceClick={onSequenceClick}
+                  />
+                </p>
+              )
+            })}
+          </div>
 
-          {/* 의도 버튼 */}
           {isCoachActive && (
             <div className="flex gap-2 mt-2 flex-wrap">
               <button
@@ -226,7 +260,6 @@ export function CoachPanel({
             <button onClick={() => setShowHints(false)} className="text-gray-400 hover:text-gray-600 text-xs">✕</button>
           </div>
 
-          {/* 공개된 힌트 단계 */}
           {hints.slice(0, currentHintStep).map((h) => (
             <div key={h.step} className="mb-2 flex gap-2 items-start">
               <span className="text-amber-600 font-bold text-sm w-5 shrink-0">{h.label}</span>
@@ -253,6 +286,8 @@ export function CoachPanel({
         currentStep={variationStep}
         onStep={onVariationStep}
         onClose={onCloseVariation}
+        hidden={variationHidden}
+        onHideToggle={onVariationHideToggle}
       />
 
       {/* 전체 메시지 기록 */}
@@ -289,7 +324,10 @@ export function CoachPanel({
               {m.type === 'question' && (
                 <span className="text-xs text-gray-400 block mb-0.5">나</span>
               )}
-              <RichText text={m.text} onCoordHover={onCoordHover} />
+              <RichText
+                text={m.text}
+                onSequenceClick={onSequenceClick}
+              />
               {m.answerId != null && onFeedback && (
                 <div className="mt-1.5">
                   <div className="flex gap-1 justify-end">
